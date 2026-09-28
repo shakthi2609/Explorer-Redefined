@@ -14,12 +14,4 @@ and :
 npm start
 ```
 
-## Directory Structure
 
-```text
-├── index.html
-├── js/
-│   ├── babel.min.js
-│   ├── react.production.min.js
-│   └── react-dom.production.min.js
-└── app.js (or inline scripts inside index.html)
