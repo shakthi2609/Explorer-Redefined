@@ -1,0 +1,12 @@
+{
+    "name": "myne",
+    "version": "0.1.0",
+    "description": "Personal space",
+    "main": "main.js",
+    "scripts": {
+      "start": "electron ."
+    },
+    "devDependencies": {
+      "electron": "^31.0.0"
+    }
+  }

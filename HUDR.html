@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROBOT // ASSEMBLY SEQUENCE — FORGE PROTOCOL</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg: #05070b;
+      --panel: rgba(11, 16, 24, 0.62);
+      --line: rgba(110, 236, 255, 0.18);
+      --cyan: #65e8ff;
+      --blue: #6396ff;
+      --white: #eef9ff;
+      --muted: #7e95a5;
+      --orange: #ffb15e;
+      --amber: #ff8a3d;
+      --hot: #ff4f6a;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--white);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0; padding: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--white);
+      font-family: inherit;
+      overflow-x: hidden;
+      overflow-x: clip;
+    }
+
+    #scene {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 0; pointer-events: none; display: block;
+    }
+
+    .noise {
+      position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+    }
+
+    .scanlines {
+      position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0.04;
+      background: repeating-linear-gradient(to bottom, rgba(120,220,255,0.10) 0, rgba(120,220,255,0.10) 1px, transparent 1px, transparent 3px);
+    }
+
+    .vignette {
+      position: fixed; inset: 0; z-index: 3; pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 42%, transparent 18%, rgba(5,7,11,0.12) 52%, rgba(5,7,11,0.85) 100%),
+        linear-gradient(180deg, rgba(5,7,11,0.3), transparent 22%, transparent 78%, rgba(5,7,11,0.55));
+    }
+
+    .letterbox {
+      position: fixed; left: 0; right: 0;
+      background: #000; z-index: 11; pointer-events: none;
+      height: 0; overflow: hidden;
+      will-change: height;
+    }
+    .letterbox.top { top: 0; }
+    .letterbox.bottom { bottom: 0; }
+
+    .corner {
+      position: fixed; width: 32px; height: 32px;
+      border: 1px solid rgba(101,232,255,0.5); z-index: 9; pointer-events: none;
+    }
+    .corner.tl { top: 16px; left: 16px; border-right: none; border-bottom: none; }
+    .corner.tr { top: 16px; right: 16px; border-left: none; border-bottom: none; }
+    .corner.bl { bottom: 16px; left: 16px; border-right: none; border-top: none; }
+    .corner.br { bottom: 16px; right: 16px; border-left: none; border-top: none; }
+    .corner::after {
+      content: ""; position: absolute; width: 6px; height: 6px;
+      background: var(--cyan); border-radius: 50%;
+      box-shadow: 0 0 8px var(--cyan);
+    }
+    .corner.tl::after { top: -3px; left: -3px; }
+    .corner.tr::after { top: -3px; right: -3px; }
+    .corner.bl::after { bottom: -3px; left: -3px; }
+    .corner.br::after { bottom: -3px; right: -3px; }
+
+    .ui { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+
+    .hud {
+      position: absolute; top: 1.35rem; left: 1.35rem;
+      letter-spacing: 0.12em; text-transform: uppercase; font-size: 0.68rem;
+      color: rgba(225,247,255,0.72); pointer-events: none;
+      display: flex; align-items: center; gap: 0.55rem;
+    }
+    .hud strong { color: var(--cyan); font-weight: 700; }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--cyan); box-shadow: 0 0 12px var(--cyan);
+      animation: pulseDot 1.4s ease-in-out infinite;
+    }
+    @keyframes pulseDot {
+      0%, 100% { opacity: 0.45; transform: scale(0.85); }
+      50% { opacity: 1; transform: scale(1.15); }
+    }
+
+    .progress-wrap {
+      position: absolute; top: 1.35rem; right: 1.35rem;
+      width: min(280px, 38vw); text-align: right;
+    }
+    .progress-label {
+      font-size: 0.68rem; letter-spacing: 0.18em;
+      color: rgba(225,247,255,0.58); text-transform: uppercase;
+      margin-bottom: 0.45rem;
+      display: flex; justify-content: flex-end; gap: 0.6rem; align-items: baseline;
+    }
+    .progress-label .pct { color: var(--cyan); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .progress-track {
+      height: 4px; background: rgba(160,215,240,0.13);
+      overflow: hidden; border-radius: 999px; position: relative;
+    }
+    .progress-track::after {
+      content: ""; position: absolute; top: 0; bottom: 0; width: 100%;
+      background: repeating-linear-gradient(90deg, transparent 0, transparent 6px, rgba(0,0,0,0.35) 6px, rgba(0,0,0,0.35) 7px);
+      pointer-events: none;
+    }
+    #progressBar {
+      width: 0%; height: 100%;
+      background: linear-gradient(90deg, var(--blue), var(--cyan), var(--orange));
+      box-shadow: 0 0 16px rgba(101,232,255,0.85);
+      transform-origin: left center;
+      will-change: width;
+    }
+
+    .phase-indicator {
+      display: flex; gap: 6px; justify-content: flex-end;
+      margin-top: 0.5rem;
+    }
+    .phase-dot {
+      width: 18px; height: 3px; background: rgba(160,215,240,0.15); border-radius: 999px;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .phase-dot.active {
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+    }
+
+    .radar-wrap {
+      position: absolute; top: 6.4rem; right: 1.35rem;
+      width: 128px; text-align: right;
+    }
+    .radar-label {
+      font-size: 0.52rem; letter-spacing: 0.22em;
+      color: rgba(101,232,255,0.55); text-transform: uppercase;
+      margin-bottom: 0.35rem;
+    }
+    #radarCanvas {
+      width: 128px; height: 128px;
+      border: 1px solid rgba(101,232,255,0.10);
+      background: rgba(5,8,14,0.35);
+      border-radius: 50%;
+      box-shadow: inset 0 0 24px rgba(101,232,255,0.06);
+      display: block; margin-left: auto;
+    }
+
+    .center-copy {
+      position: absolute; top: 13vh; left: 50%; transform: translateX(-50%);
+      width: min(820px, 88vw); text-align: center; pointer-events: none;
+      will-change: transform, opacity;
+    }
+    .eyebrow {
+      font-size: 0.74rem; letter-spacing: 0.34em; color: var(--cyan);
+      text-transform: uppercase; margin-bottom: 0.85rem; opacity: 0.9;
+      display: inline-flex; align-items: center; gap: 0.55rem;
+    }
+    .eyebrow::before, .eyebrow::after {
+      content: ""; width: 32px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    }
+    .title {
+      margin: 0; font-size: clamp(3.2rem, 8.4vw, 8.4rem);
+      line-height: 0.84; letter-spacing: -0.06em; font-weight: 800;
+      text-transform: uppercase;
+      text-shadow: 0 0 60px rgba(73,184,255,0.2), 0 0 120px rgba(101,232,255,0.06);
+    }
+    .title .char { display: inline-block; will-change: transform, opacity; }
+    .subtitle {
+      margin: 1.1rem auto 0; max-width: 620px;
+      color: rgba(217,235,242,0.66);
+      font-size: clamp(0.82rem, 1.4vw, 1.02rem); line-height: 1.72;
+    }
+
+    .hint {
+      position: absolute; bottom: 1.4rem; left: 50%; transform: translateX(-50%);
+      display: inline-flex; align-items: center; gap: 0.7rem;
+      color: rgba(224,245,252,0.62); font-size: 0.68rem;
+      letter-spacing: 0.24em; text-transform: uppercase; white-space: nowrap;
+      transition: opacity 0.35s ease;
+    }
+    .hint-line { width: 42px; height: 1px; background: rgba(101,232,255,0.55); }
+    .hint-arrow {
+      display: inline-block; width: 0; height: 0;
+      border-left: 4px solid transparent; border-right: 4px solid transparent;
+      border-top: 5px solid var(--cyan); opacity: 0.7;
+      animation: bounceArrow 1.6s ease-in-out infinite;
+    }
+    @keyframes bounceArrow {
+      0%, 100% { transform: translateY(0); opacity: 0.4; }
+      50% { transform: translateY(4px); opacity: 1; }
+    }
+
+    main { position: relative; z-index: 2; }
+    .scroll-space { height: 580vh; position: relative; }
+
+    .section {
+      height: 100vh; display: grid; place-items: center;
+      padding: 2rem; pointer-events: none;
+    }
+
+    .panel {
+      width: min(410px, 82vw);
+      margin-left: auto; margin-right: 7vw;
+      padding: 1.55rem 1.5rem 1.45rem;
+      border: 1px solid rgba(118,219,244,0.15);
+      background: linear-gradient(155deg, rgba(11,17,25,0.94), rgba(7,11,17,0.86));
+      border-radius: 14px;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        inset 0 0 0 1px rgba(101,232,255,0.06),
+        0 22px 70px rgba(0,0,0,0.35);
+      position: relative;
+      will-change: transform, opacity;
+      transform: translateZ(0);
+    }
+    .panel::before {
+      content: ""; position: absolute; top: 12px; left: 0;
+      width: 2px; height: 28px;
+      background: linear-gradient(180deg, var(--cyan), transparent);
+      box-shadow: 0 0 12px var(--cyan);
+    }
+    .panel::after {
+      content: ""; position: absolute; top: -1px; right: -1px;
+      width: 14px; height: 14px;
+      border-top: 1px solid var(--cyan); border-right: 1px solid var(--cyan);
+      border-top-right-radius: 14px;
+    }
+    .panel small {
+      display: block; font-size: 0.64rem; letter-spacing: 0.22em;
+      color: var(--cyan); text-transform: uppercase; margin-bottom: 0.7rem;
+    }
+    .panel h2 {
+      font-size: 1.5rem; margin: 0 0 0.55rem;
+      letter-spacing: -0.03em; font-weight: 700;
+    }
+    .panel p {
+      margin: 0 0 1.1rem; color: rgba(220,236,241,0.62);
+      font-size: 0.84rem; line-height: 1.66;
+    }
+    .stats {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem;
+      padding-top: 0.9rem; border-top: 1px dashed rgba(118,219,244,0.16);
+    }
+    .stat-row { display: flex; flex-direction: column; gap: 0.15rem; }
+    .stat-label {
+      font-size: 0.56rem; letter-spacing: 0.2em;
+      color: rgba(216,237,245,0.42); text-transform: uppercase;
+    }
+    .stat-value {
+      font-size: 0.86rem; font-weight: 700; color: var(--white);
+      letter-spacing: 0.04em; font-variant-numeric: tabular-nums;
+    }
+    .stat-value.cyan { color: var(--cyan); }
+    .stat-value.orange { color: var(--orange); }
+    .section:nth-child(even) .panel { margin-left: 7vw; margin-right: auto; }
+
+    .telemetry {
+      position: absolute; right: 1.35rem; bottom: 4.25rem;
+      width: min(240px, 34vw); font-size: 0.62rem;
+      letter-spacing: 0.08em; color: rgba(216,237,245,0.46);
+      text-transform: uppercase; line-height: 1.95; text-align: right;
+    }
+    .telemetry .row {
+      display: flex; justify-content: flex-end; gap: 0.55rem; align-items: baseline;
+    }
+    .telemetry span { color: rgba(224,248,255,0.86); font-weight: 600; }
+    .telemetry-bar {
+      height: 2px; width: 90px; margin-left: auto;
+      background: rgba(160,215,240,0.15); overflow: hidden; border-radius: 999px;
+      margin-top: 0.3rem;
+    }
+    .telemetry-bar > div {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--blue), var(--cyan));
+      will-change: width;
+    }
+
+    .side-readout {
+      position: absolute; left: 1.35rem; bottom: 4.25rem;
+      width: min(190px, 26vw); font-size: 0.58rem;
+      letter-spacing: 0.16em; color: rgba(216,237,245,0.42);
+      text-transform: uppercase; line-height: 1.85;
+    }
+    .side-readout .row {
+      display: flex; justify-content: space-between; align-items: baseline;
+    }
+    .side-readout span { color: rgba(224,248,255,0.78); }
+
+    .schematic {
+      position: absolute; left: 1.35rem; top: 50%; transform: translateY(-50%);
+      width: 120px; pointer-events: none;
+    }
+    .schematic-label {
+      font-size: 0.52rem; letter-spacing: 0.2em; color: rgba(101,232,255,0.5);
+      text-transform: uppercase; margin-bottom: 0.4rem;
+    }
+    #schematicCanvas {
+      width: 120px; height: 180px;
+      border: 1px solid rgba(101,232,255,0.08);
+      background: rgba(5,8,14,0.35); border-radius: 6px;
+    }
+
+    .boot {
+      position: fixed; left: 50%; bottom: 2.8rem; transform: translateX(-50%);
+      z-index: 12; padding: 0.6rem 1.1rem;
+      border: 1px solid rgba(101,232,255,0.32); border-radius: 999px;
+      background: rgba(7,13,19,0.9);
+      color: rgba(225,248,255,0.8); font-size: 0.66rem;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      pointer-events: none; opacity: 0;
+      box-shadow: 0 0 28px rgba(101,232,255,0.25);
+      transition: opacity 0.4s ease;
+    }
+
+    .part-labels { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
+    .part-label {
+      position: absolute; top: 0; left: 0;
+      font-size: 0.56rem; letter-spacing: 0.14em;
+      color: var(--cyan); text-transform: uppercase; white-space: nowrap;
+      opacity: 0;
+      text-shadow: 0 0 8px rgba(101,232,255,0.6);
+      padding: 0.2rem 0.5rem;
+      border: 1px solid rgba(101,232,255,0.2);
+      background: rgba(7,13,19,0.5); border-radius: 4px;
+      will-change: transform, opacity;
+      pointer-events: none;
+    }
+    .part-label::before {
+      content: ""; position: absolute; left: -20px; top: 50%;
+      width: 18px; height: 1px; background: rgba(101,232,255,0.4);
+    }
+
+    @media (max-width: 767px) {
+      .center-copy { top: 11vh; }
+      .panel, .section:nth-child(even) .panel {
+        width: min(310px, 80vw); margin: 0 0 50vh auto;
+      }
+      .telemetry, .side-readout, .schematic, .radar-wrap { display: none; }
+      .noise, .scanlines { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div class="noise"></div>
+  <div class="scanlines"></div>
+  <div class="vignette"></div>
+
+  <div class="letterbox top"></div>
+  <div class="letterbox bottom"></div>
+
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <div class="part-labels" id="partLabels"></div>
+
+  <div class="ui">
+    <div class="hud"><span class="status-dot"></span>SYS / <strong>UNIT-07</strong> &nbsp;•&nbsp; FORGE PROTOCOL &nbsp;•&nbsp; <span id="hudPhase">IDLE</span></div>
+
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span class="pct"><span id="progressText">00</span>%</span>
+        <span>COMPLETE</span>
+      </div>
+      <div class="progress-track"><div id="progressBar"></div></div>
+      <div class="phase-indicator" id="phaseIndicator">
+        <div class="phase-dot"></div>
+        <div class="phase-dot"></div>
+        <div class="phase-dot"></div>
+        <div class="phase-dot"></div>
+        <div class="phase-dot"></div>
+      </div>
+    </div>
+
+    <div class="radar-wrap">
+      <div class="radar-label">SCAN // DRONE NET</div>
+      <canvas id="radarCanvas" width="128" height="128"></canvas>
+    </div>
+
+    <div class="center-copy" id="heroCopy">
+      <div class="eyebrow">scroll // activate sequence</div>
+      
+      <p class="subtitle">
+        A machine does not arrive finished. Parts find their place, systems wake up,
+        and a silhouette becomes a presence.
+      </p>
+    </div>
+
+    <div class="schematic">
+      <div class="schematic-label">SCHEMATIC // LIVE</div>
+      <canvas id="schematicCanvas" width="120" height="180"></canvas>
+    </div>
+
+    <div class="side-readout">
+      <div class="row"><span>BUILD ID</span><span>FX-07.4</span></div>
+      <div class="row"><span>CHASSIS</span><span id="srChassis">--</span></div>
+      <div class="row"><span>ARTICULATION</span><span id="srArtic">--</span></div>
+      <div class="row"><span>POWER</span><span id="srPower">--</span></div>
+      <div class="row"><span>INTEGRITY</span><span id="srInteg">--</span></div>
+      <div class="row"><span>REACTOR</span><span id="srReactor">--</span></div>
+      <div class="row"><span>DRONES</span><span id="srDrones">--</span></div>
+    </div>
+
+    <div class="telemetry">
+      <div class="row">CORE: <span id="telemetryCore">OFFLINE</span></div>
+      <div class="row">JOINTS: <span id="telemetryJoints">0%</span></div>
+      <div class="telemetry-bar"><div id="telemetryBar"></div></div>
+      <div class="row">SYNC: <span id="telemetrySync">STANDBY</span></div>
+      <div class="row">TEMP: <span id="telemetryTemp">--</span></div>
+      <div class="row">FIELD: <span id="telemetryField">--</span></div>
+      <div class="row">UPLINK: <span id="telemetryUplink">--</span></div>
+    </div>
+
+    <div class="hint" id="scrollHint">
+      <span class="hint-line"></span>scroll to assemble<span class="hint-arrow"></span><span class="hint-line"></span>
+    </div>
+    <div class="boot" id="bootMessage">SYSTEM ONLINE // UNIT 07 STAND BY</div>
+  </div>
+
+  <main>
+    <div class="scroll-space" id="scrollSpace">
+      <section class="section">
+        <div class="panel" id="panel1">
+          <small>01 / awakening</small>
+          <h2>Fragments enter orbit.</h2>
+          <p>The chassis is still scattered. Every component is waiting for one command: assemble.</p>
+          <div class="stats">
+            <div class="stat-row"><span class="stat-label">PHASE</span><span class="stat-value cyan">INIT</span></div>
+            <div class="stat-row"><span class="stat-label">PARTS</span><span class="stat-value">0 / 70</span></div>
+            <div class="stat-row"><span class="stat-label">FIELD</span><span class="stat-value cyan">STABLE</span></div>
+            <div class="stat-row"><span class="stat-label">DRIFT</span><span class="stat-value">0.04</span></div>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="panel" id="panel2">
+          <small>02 / chassis</small>
+          <h2>Structure finds structure.</h2>
+          <p>Torso, pelvis and spine pull toward their anchors while the camera starts circling the build.</p>
+          <div class="stats">
+            <div class="stat-row"><span class="stat-label">PHASE</span><span class="stat-value cyan">FRAME</span></div>
+            <div class="stat-row"><span class="stat-label">PARTS</span><span class="stat-value">18 / 70</span></div>
+            <div class="stat-row"><span class="stat-label">TORQUE</span><span class="stat-value">82%</span></div>
+            <div class="stat-row"><span class="stat-label">ALIGN</span><span class="stat-value">0.7&deg;</span></div>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="panel" id="panel3">
+          <small>03 / articulation</small>
+          <h2>Joints lock in.</h2>
+          <p>Arms, legs and armor pieces snap into alignment with tiny overshoots for a mechanical punch.</p>
+          <div class="stats">
+            <div class="stat-row"><span class="stat-label">PHASE</span><span class="stat-value cyan">LIMB</span></div>
+            <div class="stat-row"><span class="stat-label">PARTS</span><span class="stat-value">44 / 70</span></div>
+            <div class="stat-row"><span class="stat-label">SERVOS</span><span class="stat-value">36 / 40</span></div>
+            <div class="stat-row"><span class="stat-label">TOLERANCE</span><span class="stat-value">0.02mm</span></div>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="panel" id="panel4">
+          <small>04 / cognition</small>
+          <h2>The core wakes.</h2>
+          <p>Energy travels through the body. The face receives its glow and the machine becomes a character.</p>
+          <div class="stats">
+            <div class="stat-row"><span class="stat-label">PHASE</span><span class="stat-value orange">CORE</span></div>
+            <div class="stat-row"><span class="stat-label">PARTS</span><span class="stat-value">60 / 70</span></div>
+            <div class="stat-row"><span class="stat-label">REACTOR</span><span class="stat-value orange">98%</span></div>
+            <div class="stat-row"><span class="stat-label">NEURAL</span><span class="stat-value">LIVE</span></div>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="panel" id="panel5">
+          <small>05 / lock</small>
+          <h2>Stand by.</h2>
+          <p>The final pose settles into place. Scroll a little farther for the finished reveal.</p>
+          <div class="stats">
+            <div class="stat-row"><span class="stat-label">PHASE</span><span class="stat-value cyan">LOCK</span></div>
+            <div class="stat-row"><span class="stat-label">PARTS</span><span class="stat-value">70 / 70</span></div>
+            <div class="stat-row"><span class="stat-label">STATUS</span><span class="stat-value cyan">READY</span></div>
+            <div class="stat-row"><span class="stat-label">SYNC</span><span class="stat-value">1.000</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+    import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+    import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+    import {
+      animate, createTimeline, stagger, onScroll, splitText, spring,
+    } from "https://cdn.jsdelivr.net/npm/animejs@4.5.0/+esm";
+
+    // ═════════════════════════ Shared scratch objects ═════════════════════════
+    const _v1 = new THREE.Vector3();
+    const _v2 = new THREE.Vector3();
+    const _v3 = new THREE.Vector3();
+    const _v4 = new THREE.Vector3();
+    const UP = new THREE.Vector3(0, 1, 0);
+
+    // ═════════════════════════ Scene / camera / renderer ═════════════════════════
+    const canvas = document.getElementById("scene");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x05070b);
+    scene.fog = new THREE.FogExp2(0x05070b, 0.028);
+
+    const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(0, 1.4, 11.5);
+
+    const cameraRig = new THREE.Group();
+    cameraRig.add(camera);
+    scene.add(cameraRig);
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: false,
+      alpha: false,
+      powerPreference: "high-performance",
+      stencil: false,
+    });
+
+    const MAX_DPR = Math.min(window.devicePixelRatio || 1, 1.75);
+    const MIN_DPR = 0.8;
+    let dpr = MAX_DPR;
+
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(innerWidth, innerHeight, false);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+
+    // ═════════════════════════ Environment map ═════════════════════════
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    const envCanvas = document.createElement("canvas");
+    envCanvas.width = 1024; envCanvas.height = 512;
+    const ectx = envCanvas.getContext("2d");
+
+    const eg = ectx.createLinearGradient(0, 0, 0, 512);
+    eg.addColorStop(0.00, "#14314f");
+    eg.addColorStop(0.28, "#1a4a70");
+    eg.addColorStop(0.46, "#2b6a95");
+    eg.addColorStop(0.52, "#163246");
+    eg.addColorStop(0.72, "#070d14");
+    eg.addColorStop(1.00, "#03050a");
+    ectx.fillStyle = eg; ectx.fillRect(0, 0, 1024, 512);
+
+    const warmH = ectx.createRadialGradient(720, 260, 0, 720, 260, 340);
+    warmH.addColorStop(0, "rgba(255,177,94,0.35)");
+    warmH.addColorStop(1, "rgba(255,177,94,0)");
+    ectx.fillStyle = warmH; ectx.fillRect(0, 0, 1024, 512);
+
+    const coolH = ectx.createRadialGradient(280, 230, 0, 280, 230, 380);
+    coolH.addColorStop(0, "rgba(101,232,255,0.4)");
+    coolH.addColorStop(1, "rgba(101,232,255,0)");
+    ectx.fillStyle = coolH; ectx.fillRect(0, 0, 1024, 512);
+
+    function streak(x, y, w, h, color, alpha) {
+      const grad = ectx.createLinearGradient(x, y, x, y + h);
+      grad.addColorStop(0, `rgba(${color},0)`);
+      grad.addColorStop(0.5, `rgba(${color},${alpha})`);
+      grad.addColorStop(1, `rgba(${color},0)`);
+      ectx.fillStyle = grad;
+      ectx.fillRect(x, y, w, h);
+    }
+    streak(600, 60, 220, 130, "255,255,255", 0.9);
+    streak(640, 80, 140, 90, "200,230,255", 1.0);
+    streak(120, 90, 180, 110, "138,242,255", 0.75);
+    streak(760, 200, 160, 100, "255,177,94", 0.5);
+    streak(320, 140, 80, 40, "101,232,255", 0.55);
+    streak(500, 170, 60, 30, "255,255,255", 0.6);
+    streak(880, 150, 90, 45, "138,242,255", 0.4);
+
+    for (let i = 0; i < 320; i++) {
+      const x = Math.random() * 1024;
+      const y = Math.random() * 220 + 20;
+      const r = Math.random() * 1.2 + 0.3;
+      ectx.fillStyle = `rgba(255,255,255,${Math.random() * 0.35 + 0.05})`;
+      ectx.beginPath();
+      ectx.arc(x, y, r, 0, Math.PI * 2);
+      ectx.fill();
+    }
+
+    const envTex = new THREE.CanvasTexture(envCanvas);
+    envTex.mapping = THREE.EquirectangularReflectionMapping;
+    envTex.colorSpace = THREE.SRGBColorSpace;
+    const envMap = pmrem.fromEquirectangular(envTex).texture;
+    scene.environment = envMap;
+    envTex.dispose();
+    pmrem.dispose();
+
+    // ═════════════════════════ Post-processing ═════════════════════════
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(innerWidth, innerHeight), 0.7, 0.72, 0.82
+    );
+    composer.addPass(bloomPass);
+
+    let bloomPulse = 0;
+
+    function applySize() {
+      const w = innerWidth, h = innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(dpr);
+      renderer.setSize(w, h, false);
+      composer.setPixelRatio(dpr);
+      composer.setSize(w, h);
+    }
+
+    // ═════════════════════════ Lighting ═════════════════════════
+    scene.add(new THREE.HemisphereLight(0x8ecbf0, 0x080a10, 1.05));
+
+    const key = new THREE.DirectionalLight(0xb8dcff, 2.4);
+    key.position.set(4, 8, 7); key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.near = 2;
+    key.shadow.camera.far = 22;
+    key.shadow.camera.left = -6;
+    key.shadow.camera.right = 6;
+    key.shadow.camera.top = 8;
+    key.shadow.camera.bottom = -8;
+    key.shadow.bias = -0.0012;
+    scene.add(key);
+
+    const rim = new THREE.PointLight(0x5cecff, 2.6, 16, 2);
+    rim.position.set(-4, 4, -3); scene.add(rim);
+
+    const warm = new THREE.PointLight(0xffa34a, 1.4, 10, 2);
+    warm.position.set(4, -1, 2); scene.add(warm);
+
+    const underGlow = new THREE.PointLight(0x49d6ff, 1.6, 8, 2);
+    underGlow.position.set(0, -3.5, 0); scene.add(underGlow);
+
+    const coreLight = new THREE.PointLight(0x65e8ff, 0.0, 5, 2);
+    coreLight.position.set(0, 0.47, 1.0); scene.add(coreLight);
+
+    const finaleKey = new THREE.PointLight(0xffb15e, 0.0, 12, 2);
+    finaleKey.position.set(0, 3, 4); scene.add(finaleKey);
+    const finaleRim = new THREE.PointLight(0x65e8ff, 0.0, 12, 2);
+    finaleRim.position.set(0, 2, -5); scene.add(finaleRim);
+
+    // ═════════════════════════ Background field ═════════════════════════
+    const starCount = 1600;
+    const stars = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(starCount * 3);
+    const starColors = new Float32Array(starCount * 3);
+    const palette = [
+      new THREE.Color(0x9ddaff), new THREE.Color(0x6396ff),
+      new THREE.Color(0xffb15e), new THREE.Color(0xffffff),
+    ];
+    for (let i = 0; i < starCount; i++) {
+      const radius = 18 + Math.random() * 30;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      starPositions[i*3]     = radius * Math.sin(phi) * Math.cos(theta);
+      starPositions[i*3 + 1] = radius * Math.cos(phi);
+      starPositions[i*3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
+      const c = palette[Math.floor(Math.random() * palette.length)];
+      starColors[i*3] = c.r; starColors[i*3+1] = c.g; starColors[i*3+2] = c.b;
+    }
+    stars.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+    stars.setAttribute("color", new THREE.BufferAttribute(starColors, 3));
+    const starField = new THREE.Points(stars, new THREE.PointsMaterial({
+      size: 0.04, vertexColors: true, transparent: true, opacity: 0.75,
+      depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    starField.matrixAutoUpdate = false;
+    scene.add(starField);
+
+    const nebulaGeo = new THREE.BufferGeometry();
+    const nebCount = 80;
+    const nebPos = new Float32Array(nebCount * 3);
+    const nebCol = new Float32Array(nebCount * 3);
+    for (let i = 0; i < nebCount; i++) {
+      nebPos[i*3]     = (Math.random() - 0.5) * 60;
+      nebPos[i*3 + 1] = (Math.random() - 0.5) * 30 + 5;
+      nebPos[i*3 + 2] = -15 - Math.random() * 20;
+      const c = Math.random() > 0.5 ? new THREE.Color(0x2a4a7a) : new THREE.Color(0x4a2a3a);
+      nebCol[i*3] = c.r; nebCol[i*3+1] = c.g; nebCol[i*3+2] = c.b;
+    }
+    nebulaGeo.setAttribute("position", new THREE.BufferAttribute(nebPos, 3));
+    nebulaGeo.setAttribute("color", new THREE.BufferAttribute(nebCol, 3));
+    const nebTexture = (() => {
+      const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+      const cx = c.getContext("2d");
+      const g = cx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(1, "rgba(255,255,255,0)");
+      cx.fillStyle = g; cx.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(c);
+    })();
+    const nebMat = new THREE.PointsMaterial({
+      size: 3.0, vertexColors: true, transparent: true, opacity: 0.06,
+      depthWrite: false, blending: THREE.AdditiveBlending, map: nebTexture
+    });
+    const nebula = new THREE.Points(nebulaGeo, nebMat);
+    nebula.matrixAutoUpdate = false;
+    scene.add(nebula);
+
+    // ── Contact shadow ──
+    const contactShadowTex = (() => {
+      const c = document.createElement("canvas"); c.width = c.height = 256;
+      const cx = c.getContext("2d");
+      const g = cx.createRadialGradient(128, 128, 0, 128, 128, 128);
+      g.addColorStop(0,   "rgba(0,0,0,0.9)");
+      g.addColorStop(0.35, "rgba(0,0,0,0.45)");
+      g.addColorStop(0.7, "rgba(0,0,0,0.1)");
+      g.addColorStop(1,   "rgba(0,0,0,0)");
+      cx.fillStyle = g; cx.fillRect(0, 0, 256, 256);
+      return new THREE.CanvasTexture(c);
+    })();
+    const contactShadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(7, 7),
+      new THREE.MeshBasicMaterial({
+        map: contactShadowTex,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0.6,
+      })
+    );
+    contactShadow.rotation.x = -Math.PI / 2;
+    contactShadow.position.y = -4.96;
+    contactShadow.renderOrder = 2;
+    contactShadow.matrixAutoUpdate = false;
+    contactShadow.updateMatrix();
+    scene.add(contactShadow);
+
+    // ── Reflective floor ──
+    const reflectiveFloor = new THREE.Mesh(
+      new THREE.PlaneGeometry(80, 80),
+      new THREE.MeshStandardMaterial({
+        color: 0x070a10,
+        metalness: 1.0,
+        roughness: 0.22,
+        envMapIntensity: 1.4,
+      })
+    );
+    reflectiveFloor.rotation.x = -Math.PI / 2;
+    reflectiveFloor.position.y = -5.0;
+    reflectiveFloor.receiveShadow = true;
+    reflectiveFloor.matrixAutoUpdate = false;
+    reflectiveFloor.updateMatrix();
+    scene.add(reflectiveFloor);
+
+    // ── Floor glow overlay ──
+    const floorGlow = (() => {
+      const c = document.createElement("canvas"); c.width = c.height = 256;
+      const cx = c.getContext("2d");
+      const g = cx.createRadialGradient(128, 128, 0, 128, 128, 128);
+      g.addColorStop(0, "rgba(101,232,255,0.35)");
+      g.addColorStop(0.5, "rgba(101,232,255,0.08)");
+      g.addColorStop(1, "rgba(101,232,255,0)");
+      cx.fillStyle = g; cx.fillRect(0, 0, 256, 256);
+      return new THREE.CanvasTexture(c);
+    })();
+    const floorGlowMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(20, 20),
+      new THREE.MeshBasicMaterial({
+        map: floorGlow,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.5,
+      })
+    );
+    floorGlowMesh.rotation.x = -Math.PI / 2;
+    floorGlowMesh.position.y = -4.94;
+    floorGlowMesh.renderOrder = 1;
+    floorGlowMesh.matrixAutoUpdate = false;
+    floorGlowMesh.updateMatrix();
+    scene.add(floorGlowMesh);
+
+    // Foreground dust
+    const dustCount = 260;
+    const dustGeo = new THREE.BufferGeometry();
+    const dustPos = new Float32Array(dustCount * 3);
+    for (let i = 0; i < dustCount; i++) {
+      dustPos[i*3]     = (Math.random() - 0.5) * 16;
+      dustPos[i*3 + 1] = (Math.random() - 0.5) * 14;
+      dustPos[i*3 + 2] = (Math.random() - 0.5) * 10;
+    }
+    dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3));
+    const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+      color: 0xbff0ff, size: 0.025, transparent: true, opacity: 0.4,
+      depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    scene.add(dust);
+
+    // ═════════════════════════ Materials ═════════════════════════
+    const armor      = new THREE.MeshStandardMaterial({ color: 0x26333f, metalness: 0.92, roughness: 0.24, envMapIntensity: 1.5 });
+    const armorLight = new THREE.MeshStandardMaterial({ color: 0x738797, metalness: 0.95, roughness: 0.17, envMapIntensity: 1.7 });
+    const darkMetal  = new THREE.MeshStandardMaterial({ color: 0x10161d, metalness: 0.98, roughness: 0.18, envMapIntensity: 1.9 });
+    const jointMat   = new THREE.MeshStandardMaterial({ color: 0x4b5964, metalness: 1.00, roughness: 0.14, envMapIntensity: 1.8 });
+    const copperMat  = new THREE.MeshStandardMaterial({ color: 0x6b4a32, metalness: 0.97, roughness: 0.28, envMapIntensity: 1.5 });
+    const glowMat    = new THREE.MeshStandardMaterial({ color: 0x8af2ff, emissive: 0x28dfff, emissiveIntensity: 2.2, metalness: 0.35, roughness: 0.18, envMapIntensity: 1.2 });
+    const orangeGlow = new THREE.MeshStandardMaterial({ color: 0xffc276, emissive: 0xff6500, emissiveIntensity: 2.0, metalness: 0.3, roughness: 0.22, envMapIntensity: 1.2 });
+    const redGlow    = new THREE.MeshStandardMaterial({ color: 0xff8a8a, emissive: 0xff2030, emissiveIntensity: 1.8, metalness: 0.3, roughness: 0.22, envMapIntensity: 1.2 });
+    const crestMat   = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x65e8ff, emissiveIntensity: 2.8, metalness: 0.5, roughness: 0.12, envMapIntensity: 1.6 });
+
+    function box(w,h,d,m){ const me=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); me.castShadow=true; me.receiveShadow=true; return me; }
+    function cyl(r1,r2,h,m,s=24){ const me=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,s),m); me.castShadow=true; me.receiveShadow=true; return me; }
+    function sph(r,m,s=24){ const me=new THREE.Mesh(new THREE.SphereGeometry(r,s,s),m); me.castShadow=true; me.receiveShadow=true; return me; }
+    function tor(r,t,m,sr=24,st=12){ const me=new THREE.Mesh(new THREE.TorusGeometry(r,t,st,sr),m); me.castShadow=true; me.receiveShadow=true; return me; }
+
+    // ═════════════════════════ Robot construction ═════════════════════════
+    const robot = new THREE.Group();
+    robot.position.set(0, 0.15, 0);
+    scene.add(robot);
+
+    const parts = [];
+    const part = (mesh, name, finalPos, finalRot = {x:0,y:0,z:0}, introPos, introRot = {x:0,y:0,z:0}) => {
+      mesh.position.set(...introPos);
+      mesh.rotation.set(introRot.x, introRot.y, introRot.z);
+      const initialScale = 0.36 + ((parts.length * 7) % 11) * 0.028;
+      mesh.scale.setScalar(initialScale);
+      mesh.userData.assembly = {
+        name, finalPos, finalRot, introPos, introRot, initialScale,
+        finalVec: new THREE.Vector3(finalPos[0], finalPos[1], finalPos[2])
+      };
+      robot.add(mesh); parts.push(mesh); return mesh;
+    };
+
+    // ── TORSO / SPINE ──
+    part(box(2.2, 2.35, 1.35, armorLight), "torso", [0,0.15,0], {x:0,y:0,z:0}, [-0.3,5.1,0.7], {x:-0.3,y:0.55,z:0.18});
+    part(box(1.78, 1.34, 1.48, armor), "chest", [0,0.55,0.08], {x:0,y:0,z:0}, [1.3,5.8,-0.3], {x:0.5,y:-0.7,z:0.6});
+    part(box(1.55, 0.62, 1.18, darkMetal), "abdomen", [0,-0.55,0], {x:0,y:0,z:0}, [-1.1,4.4,0.5], {x:0.3,y:0.8,z:-0.5});
+    part(cyl(0.08,0.08,1.4,jointMat,12), "spineBar", [0,-0.1,-0.7], {x:0,y:0,z:0}, [2.0,5.0,-1.3], {x:0,y:0,z:1});
+    part(tor(0.62,0.07,jointMat,32,12), "collar", [0,1.3,0], {x:Math.PI/2,y:0,z:0}, [-0.7,6.0,1.1], {x:0,y:1,z:0.2});
+
+    const core = part(cyl(0.34,0.34,0.22,glowMat,32), "core", [0,0.47,0.82], {x:Math.PI/2,y:0,z:0}, [-1.8,2.6,1.3], {x:0.5,y:0,z:2});
+    part(tor(0.46,0.025,glowMat,36,8), "coreRing", [0,0.47,0.84], {x:Math.PI/2,y:0,z:0}, [-1.4,3.0,1.6], {x:0,y:0,z:0});
+    part(cyl(0.5,0.5,0.18,darkMetal,32), "coreHousing", [0,0.47,0.7], {x:Math.PI/2,y:0,z:0}, [1.5,3.4,1.8], {x:0,y:0.8,z:0});
+    const reactorRing = part(tor(0.3,0.018,glowMat,32,6), "reactorRing", [0,0.47,0.86], {x:Math.PI/2,y:0,z:0}, [-1.2,3.6,1.8], {x:0,y:0,z:0});
+    part(cyl(0.05,0.05,0.12,jointMat,8), "cb1", [0.42,0.47,0.78], {x:Math.PI/2,y:0,z:0}, [2.2,4.0,1.0], {x:0,y:0,z:0});
+    part(cyl(0.05,0.05,0.12,jointMat,8), "cb2", [-0.42,0.47,0.78], {x:Math.PI/2,y:0,z:0}, [-2.2,4.0,1.0], {x:0,y:0,z:0});
+
+    part(tor(0.72, 0.03, crestMat, 6, 8), "chestEmblem", [0, 0.47, 0.86], {x: Math.PI/2, y: 0, z: 0}, [0, 4.5, 2.4], {x:0,y:0.4,z:0.3});
+    part(cyl(0.09,0.09,0.08, orangeGlow, 6), "chestGem", [0, 0.47, 1.02], {x: Math.PI/2, y: 0, z: 0}, [-0.5, 5.2, 2.6], {x:0.3,y:0,z:0});
+
+    part(box(0.5,0.58,0.14,darkMetal), "chestPanelL", [-0.63,0.66,0.74], {x:0,y:0,z:-0.06}, [-2.4,3.4,0.7], {x:0.4,y:0.2,z:0.9});
+    part(box(0.5,0.58,0.14,darkMetal), "chestPanelR", [0.63,0.66,0.74], {x:0,y:0,z:0.06}, [2.7,3.0,1.0], {x:-0.2,y:-0.3,z:-0.7});
+    part(box(0.4,0.04,0.5,copperMat), "ventL1", [-0.78,-0.05,0.7], {x:0,y:0,z:0}, [-2.6,3.7,0.4], {x:0.3,y:0.2,z:0.1});
+    part(box(0.4,0.04,0.5,copperMat), "ventL2", [-0.78,-0.18,0.7], {x:0,y:0,z:0}, [-2.4,3.9,0.4], {x:0.3,y:0.2,z:0.1});
+    part(box(0.4,0.04,0.5,copperMat), "ventR1", [0.78,-0.05,0.7], {x:0,y:0,z:0}, [2.6,3.7,0.4], {x:-0.3,y:0.2,z:0.1});
+    part(box(0.4,0.04,0.5,copperMat), "ventR2", [0.78,-0.18,0.7], {x:0,y:0,z:0}, [2.4,3.9,0.4], {x:-0.3,y:0.2,z:0.1});
+    part(cyl(0.07,0.07,1.1,copperMat,12), "pipeL", [-1.05,0.2,0.0], {x:Math.PI/2,y:0,z:0}, [-2.0,5.6,1.5], {x:0,y:0.4,z:0});
+    part(cyl(0.07,0.07,1.1,copperMat,12), "pipeR", [1.05,0.2,0.0], {x:Math.PI/2,y:0,z:0}, [2.0,5.6,1.5], {x:0,y:0.4,z:0});
+
+    // ── HEAD ──
+    part(cyl(0.23,0.25,0.35,jointMat), "neck", [0,1.52,0], {x:0,y:0,z:0}, [1.2,6.7,0], {x:0,y:1.2,z:0.2});
+    part(box(1.35,1.15,1.25,armorLight), "head", [0,2.33,0], {x:0,y:0,z:0}, [-1.4,7.2,-0.8], {x:-0.8,y:-0.4,z:-0.35});
+    part(box(1.0,0.18,0.6,armor), "headCrown", [0,2.92,0.0], {x:0,y:0,z:0}, [1.6,7.8,-1.0], {x:0.5,y:0.4,z:0.2});
+    part(box(0.08, 0.55, 0.55, crestMat), "helmetCrest", [0, 3.22, -0.02], {x: 0.15, y: 0, z: 0}, [2.0, 6.2, -1.5], {x:0.4,y:0.6,z:0.4});
+    part(box(0.04, 0.35, 0.4, orangeGlow), "helmetCrestGlow", [0, 3.02, -0.02], {x: 0.15, y: 0, z: 0}, [-1.6, 6.5, -1.6], {x:0.3,y:0.6,z:0.4});
+    part(box(0.94,0.18,0.98,darkMetal), "visor", [0,2.33,0.67], {x:0,y:0,z:0}, [1.8,7.1,1.8], {x:1,y:0.7,z:-0.3});
+    part(box(0.6,0.05,0.14,glowMat), "visorInner", [0,2.36,1.12], {x:0,y:0,z:0}, [1.6,7.0,2.0], {x:0,y:0,z:0.2});
+    part(box(0.72,0.07,0.16,glowMat), "eyeLine", [0,2.33,1.18], {x:0,y:0,z:0}, [-1.7,6.4,2.5], {x:0,y:0,z:0.2});
+    part(sph(0.08,glowMat,16), "foreGem", [0,2.66,0.66], {x:0,y:0,z:0}, [-1.2,6.8,2.0], {x:0,y:0,z:0.5});
+    part(box(0.22,0.5,0.7,armor), "earL", [-0.74,2.33,0.0], {x:0,y:0,z:0}, [-2.5,7.0,1.0], {x:0.3,y:0.4,z:0.2});
+    part(box(0.22,0.5,0.7,armor), "earR", [0.74,2.33,0.0], {x:0,y:0,z:0}, [2.5,7.0,1.0], {x:-0.3,y:0.4,z:0.2});
+    part(box(0.4,0.04,0.06,glowMat), "earSensorL", [-0.85,2.45,0.36], {x:0,y:0,z:0}, [-2.7,7.2,1.2], {x:0,y:0,z:0});
+    part(box(0.4,0.04,0.06,glowMat), "earSensorR", [0.85,2.45,0.36], {x:0,y:0,z:0}, [2.7,7.2,1.2], {x:0,y:0,z:0});
+    part(box(0.9,0.32,0.7,armor), "jaw", [0,1.95,0.4], {x:-0.2,y:0,z:0}, [-1.6,6.0,1.8], {x:0.4,y:0.3,z:-0.5});
+    part(box(1.0,0.5,0.1,darkMetal), "headBack", [0,2.33,-0.66], {x:0,y:0,z:0}, [1.4,7.2,-2.0], {x:0,y:0,z:0.3});
+    part(cyl(0.08,0.04,0.65,orangeGlow,16), "antenna", [0.36,3.08,0], {x:0,y:0,z:0}, [2.1,5.3,0.6], {x:0.3,y:-0.5,z:1.7});
+    part(cyl(0.04,0.02,0.32,orangeGlow,12), "antenna2", [-0.36,3.0,0], {x:0,y:0,z:0}, [-2.0,5.4,0.6], {x:-0.3,y:0.5,z:1.7});
+    part(sph(0.06,orangeGlow,12), "antennaTip", [0.36,3.42,0], {x:0,y:0,z:0}, [2.3,5.6,0.8], {x:0,y:0,z:0});
+
+    // ── PELVIS ──
+    part(box(1.82,0.72,1.18,armorLight), "pelvis", [0,-1.28,0], {x:0,y:0,z:0}, [0.7,-3.8,0.5], {x:0.4,y:-1,z:0.1});
+    part(box(0.5,0.4,0.7,armor), "pelvisPlate", [0,-1.2,0.55], {x:-0.15,y:0,z:0}, [0.9,-3.5,1.4], {x:0.3,y:-0.4,z:0.2});
+    part(cyl(0.08,0.08,0.4,glowMat,12), "pelvisBolt1", [-0.45,-1.28,0.62], {x:Math.PI/2,y:0,z:0}, [-1.5,-4.2,1.4], {x:0,y:0,z:0});
+    part(cyl(0.08,0.08,0.4,glowMat,12), "pelvisBolt2", [0.45,-1.28,0.62], {x:Math.PI/2,y:0,z:0}, [1.5,-4.2,1.4], {x:0,y:0,z:0});
+
+    // ── BACKPACK + WINGS + SWORD ──
+    part(box(1.7,1.4,0.55,darkMetal), "backpack", [0,0.4,-0.85], {x:0,y:0,z:0}, [0.5,5.5,-2.4], {x:0.2,y:0.4,z:0.5});
+    part(cyl(0.18,0.22,0.45,jointMat,20), "thrusterC", [0,0.7,-1.18], {x:Math.PI/2,y:0,z:0}, [0.8,5.8,-2.8], {x:0,y:0,z:0});
+    part(cyl(0.14,0.18,0.45,jointMat,20), "thrusterL", [-0.55,0.4,-1.18], {x:Math.PI/2,y:0,z:0}, [-0.6,5.4,-2.8], {x:0,y:0,z:0});
+    part(cyl(0.14,0.18,0.45,jointMat,20), "thrusterR", [0.55,0.4,-1.18], {x:Math.PI/2,y:0,z:0}, [1.0,5.4,-2.8], {x:0,y:0,z:0});
+    part(cyl(0.08,0.08,0.04,orangeGlow,12), "thrusterCGlow", [0,0.7,-1.42], {x:0,y:0,z:0}, [0.8,5.8,-3.0], {x:0,y:0,z:0});
+    part(cyl(0.06,0.06,0.04,orangeGlow,12), "thrusterLGlow", [-0.55,0.4,-1.42], {x:0,y:0,z:0}, [-0.6,5.4,-3.0], {x:0,y:0,z:0});
+    part(cyl(0.06,0.06,0.04,orangeGlow,12), "thrusterRGlow", [0.55,0.4,-1.42], {x:0,y:0,z:0}, [1.0,5.4,-3.0], {x:0,y:0,z:0});
+    part(cyl(0.22,0.22,1.0,copperMat,20), "energyTank", [0,0.4,-1.0], {x:Math.PI/2,y:0,z:0}, [-1.4,4.8,-2.5], {x:0,y:0,z:0.6});
+    part(box(0.9,1.4,0.08,armor), "wingL", [-1.1,0.6,-0.9], {x:0,y:-0.4,z:0.35}, [-3.0,5.0,-2.0], {x:0.5,y:0.5,z:0.3});
+    part(box(0.9,1.4,0.08,armor), "wingR", [1.1,0.6,-0.9], {x:0,y:0.4,z:-0.35}, [3.0,5.0,-2.0], {x:-0.5,y:0.5,z:0.3});
+    part(cyl(0.03,0.02,0.45,orangeGlow,8), "bpAnt1", [-0.5,1.25,-0.9], {x:0.1,y:0,z:0.1}, [-1.8,5.0,-2.2], {x:0,y:0,z:0});
+    part(cyl(0.03,0.02,0.35,orangeGlow,8), "bpAnt2", [0.0,1.25,-0.9], {x:-0.05,y:0,z:0}, [-1.5,5.2,-2.2], {x:0,y:0,z:0});
+    part(cyl(0.03,0.02,0.4,orangeGlow,8), "bpAnt3", [0.5,1.25,-0.9], {x:0.08,y:0,z:-0.1}, [-1.2,5.0,-2.2], {x:0,y:0,z:0});
+    part(box(0.12,0.32,0.12,darkMetal), "swordHilt", [-0.55,1.15,-0.85], {x:0,y:0,z:0.35}, [-2.5,5.0,-2.0], {x:0.3,y:0.5,z:0.4});
+    part(box(0.3,0.08,0.08,armor), "swordGuard", [-0.55,1.32,-0.85], {x:0,y:0,z:0.35}, [-2.4,5.2,-2.0], {x:0.2,y:0.4,z:0.3});
+    const swordBlade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 2.8, 0.015),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff, emissive: 0x65e8ff, emissiveIntensity: 3.2,
+        metalness: 0.5, roughness: 0.1, transparent: true, opacity: 0.92,
+        envMapIntensity: 1.5,
+      })
+    );
+    swordBlade.position.set(-0.55, 2.7, -0.85);
+    swordBlade.rotation.z = 0.35;
+    swordBlade.scale.y = 0.01;
+    robot.add(swordBlade);
+
+    // ── SHOULDERS ──
+    function makePauldron(side) {
+      const s = side, sx = s * 1;
+      part(box(0.95,0.55,1.0,armor), `pauldron-${s}`, [sx*1.32,1.18,0], {x:-0.15,y:0,z:0}, [sx*3.0,5.3,0.5], {x:0.4,y:0.6,z:0.3});
+      part(box(0.7,0.16,0.7,armorLight), `pauldronTop-${s}`, [sx*1.32,1.5,0], {x:-0.1,y:0,z:0}, [sx*3.2,5.7,0.5], {x:0.3,y:0.4,z:0.2});
+      part(sph(0.32,jointMat), `shoulder-${s}`, [sx*1.32,0.78,0], {x:0,y:0,z:0}, [sx*3.0,4.9,0.3], {x:1.2,y:0.6,z:-1.1});
+      part(box(0.18,0.18,0.08,glowMat), `pauldronLight-${s}`, [sx*(1.32+0.5*s),1.18,0.5], {x:0,y:0,z:0}, [sx*3.6,5.3,1.0], {x:0,y:0,z:0});
+      part(box(0.5,0.28,0.5,darkMetal), `missilePod-${s}`, [sx*1.42,1.55,-0.15], {x:0.1,y:0,z:0}, [sx*3.4,5.8,0.3], {x:0.3,y:0.4,z:0.2});
+      part(cyl(0.04,0.04,0.06,darkMetal,8), `mh1-${s}`, [sx*(1.42+0.12),1.6,-0.32], {x:Math.PI/2,y:0,z:0}, [sx*3.5,5.9,0.2], {x:0,y:0,z:0});
+      part(cyl(0.04,0.04,0.06,darkMetal,8), `mh2-${s}`, [sx*(1.42-0.12),1.6,-0.32], {x:Math.PI/2,y:0,z:0}, [sx*3.5,5.9,0.2], {x:0,y:0,z:0});
+      part(cyl(0.04,0.04,0.06,darkMetal,8), `mh3-${s}`, [sx*(1.42+0.12),1.5,-0.32], {x:Math.PI/2,y:0,z:0}, [sx*3.5,5.9,0.2], {x:0,y:0,z:0});
+      part(cyl(0.04,0.04,0.06,darkMetal,8), `mh4-${s}`, [sx*(1.42-0.12),1.5,-0.32], {x:Math.PI/2,y:0,z:0}, [sx*3.5,5.9,0.2], {x:0,y:0,z:0});
+      part(box(0.42, 0.22, 0.55, darkMetal), `cannon-${s}`, [sx*1.75, 1.62, 0.28], {x: 0.05, y: 0, z: 0}, [sx*4.6, 5.2, 1.5], {x:0.3,y:0.4,z:0.4});
+      part(cyl(0.05, 0.05, 0.75, armorLight, 12), `cannonBarrel1-${s}`, [sx*1.75, 1.62, 0.72], {x: Math.PI/2, y: 0, z: 0}, [sx*4.8, 5.4, 2.2], {x:0.2,y:0.3,z:0.3});
+      part(cyl(0.035, 0.035, 0.5, armorLight, 12), `cannonBarrel2-${s}`, [sx*(1.75 + 0.15*s), 1.62, 0.72], {x: Math.PI/2, y: 0, z: 0}, [sx*4.9, 5.5, 2.2], {x:0.2,y:0.3,z:0.3});
+      part(cyl(0.035, 0.035, 0.5, armorLight, 12), `cannonBarrel3-${s}`, [sx*(1.75 - 0.15*s), 1.62, 0.72], {x: Math.PI/2, y: 0, z: 0}, [sx*4.9, 5.5, 2.2], {x:0.2,y:0.3,z:0.3});
+      part(cyl(0.06, 0.06, 0.06, orangeGlow, 12), `cannonTip-${s}`, [sx*1.75, 1.62, 1.08], {x: Math.PI/2, y: 0, z: 0}, [sx*5.0, 5.6, 2.4], {x:0,y:0,z:0});
+      part(box(0.05, 0.4, 0.4, copperMat), `podFin1-${s}`, [sx*(1.32 + 0.56*s), 1.22, -0.15], {x:0,y:0,z:0}, [sx*3.9, 4.9, 0.4], {x:0.2,y:0.2,z:0.2});
+      part(box(0.05, 0.4, 0.4, copperMat), `podFin2-${s}`, [sx*(1.32 + 0.56*s), 1.22, 0.15], {x:0,y:0,z:0}, [sx*3.9, 4.9, 0.5], {x:0.2,y:0.2,z:0.2});
+    }
+    makePauldron(1); makePauldron(-1);
+
+    // ── ARMS ──
+    function makeArm(side) {
+      const s = side, sx = s * 1;
+      part(box(0.68,1.42,0.8,armor), `upper-arm-${s}`, [sx*1.65,-0.02,0], {x:0,y:0,z:0}, [sx*4.1,2.5,-0.4], {x:-0.5,y:0.8,z:1.4});
+      part(box(0.4,1.0,0.3,armorLight), `bicep-${s}`, [sx*1.65,0.0,0.45], {x:0,y:0,z:0}, [sx*4.4,2.8,0.4], {x:0.4,y:0.5,z:0.2});
+      part(cyl(0.25,0.25,0.32,jointMat), `elbow-${s}`, [sx*1.65,-0.84,0], {x:0,y:0,z:Math.PI/2}, [sx*3.3,4.0,0.8], {x:0.2,y:1.1,z:0.8});
+      part(box(0.42,0.42,0.5,armor), `elbowArmor-${s}`, [sx*1.65,-0.84,0.35], {x:-0.2,y:0,z:0}, [sx*3.6,4.2,1.0], {x:0.3,y:0.5,z:0.4});
+      part(box(0.6,1.35,0.72,armorLight), `forearm-${s}`, [sx*1.65,-1.57,0], {x:0,y:0,z:0}, [sx*4.4,-0.5,0.8], {x:1,y:0.3,z:-1.5});
+      part(box(0.5,1.1,0.3,armor), `forearmGuard-${s}`, [sx*1.65,-1.45,0.42], {x:-0.15,y:0,z:0}, [sx*4.2,-0.8,1.3], {x:0.5,y:0.4,z:0.5});
+      part(cyl(0.22,0.22,0.18,jointMat), `wrist-${s}`, [sx*1.65,-2.22,0], {x:0,y:0,z:0}, [sx*3.0,-1.5,-0.8], {x:0.3,y:0.5,z:0.4});
+      part(box(0.7,0.36,0.65,darkMetal), `hand-${s}`, [sx*1.65,-2.42,0], {x:0,y:0,z:0}, [sx*2.9,-1.7,-1.0], {x:-1.4,y:0,z:0.5});
+      part(box(0.14,0.42,0.14,armorLight), `finger-${s}-1`, [sx*(1.65-0.18),-2.7,0.18], {x:0,y:0,z:0}, [sx*2.7,-2.1,-1.0], {x:0.3,y:0,z:0});
+      part(box(0.14,0.42,0.14,armorLight), `finger-${s}-2`, [sx*1.65,-2.7,0.18], {x:0,y:0,z:0}, [sx*3.0,-2.0,-1.1], {x:0.3,y:0,z:0});
+      part(box(0.14,0.42,0.14,armorLight), `finger-${s}-3`, [sx*(1.65+0.18),-2.7,0.18], {x:0,y:0,z:0}, [sx*3.3,-2.1,-1.0], {x:0.3,y:0,z:0});
+      part(box(0.14,0.32,0.14,armorLight), `thumb-${s}`, [sx*(1.65-0.28*s),-2.45,-0.18], {x:0,y:0,z:-0.4}, [sx*2.5,-1.8,-1.3], {x:0.4,y:0,z:0.4});
+      part(cyl(0.08,0.08,0.55,jointMat,12), `weapon-${s}`, [sx*1.65,-1.65,0.55], {x:Math.PI/2,y:0,z:0}, [sx*4.0,-0.8,1.5], {x:0,y:0,z:0});
+      part(box(0.16,0.16,0.6,darkMetal), `weaponTip-${s}`, [sx*1.65,-1.65,0.85], {x:0,y:0,z:0}, [sx*4.2,-0.9,1.8], {x:0,y:0,z:0});
+      part(box(0.06,0.06,0.06,redGlow), `weaponLight-${s}`, [sx*1.65,-1.65,1.18], {x:0,y:0,z:0}, [sx*4.4,-1.0,2.0], {x:0,y:0,z:0});
+    }
+    makeArm(1); makeArm(-1);
+
+    // ── LEGS ──
+    function makeLeg(side) {
+      const s = side;
+      part(sph(0.28,jointMat), `hip-${s}`, [s*0.65,-1.68,0], {x:0,y:0,z:0}, [s*2.7,-0.4,0.8], {x:0.2,y:1.2,z:0.7});
+      part(box(0.95,0.5,0.7,armor), `hipArmor-${s}`, [s*0.85,-1.4,0.0], {x:-0.1,y:0,z:0}, [s*2.9,-0.8,0.5], {x:0.3,y:0.4,z:0.2});
+      part(cyl(0.14, 0.18, 0.34, jointMat, 16), `hipThruster-${s}`, [s*1.15, -1.55, -0.35], {x: Math.PI/2, y: 0, z: 0}, [s*3.2, -1.0, -0.8], {x:0.4,y:0.6,z:0.4});
+      part(cyl(0.07, 0.05, 0.06, orangeGlow, 12), `hipThrusterGlow-${s}`, [s*1.15, -1.55, -0.62], {x:0,y:0,z:0}, [s*3.3, -1.1, -1.0], {x:0,y:0,z:0});
+      part(box(0.7,1.58,0.78,armor), `thigh-${s}`, [s*0.65,-2.36,0], {x:0,y:0,z:0}, [s*4.0,-2.2,-0.4], {x:0.6,y:-0.4,z:-1.1});
+      part(box(0.4,1.2,0.3,armorLight), `thighAccent-${s}`, [s*0.65,-2.3,0.45], {x:0,y:0,z:0}, [s*4.2,-2.5,0.4], {x:0.4,y:0.3,z:0.2});
+      part(cyl(0.26,0.26,0.34,jointMat), `knee-${s}`, [s*0.65,-3.23,0], {x:Math.PI/2,y:0,z:0}, [s*2.4,-4.8,0.4], {x:0.5,y:1,z:0.3});
+      part(sph(0.32,armor,24,12), `kneeCap-${s}`, [s*0.65,-3.23,0.3], {x:0,y:0,z:0}, [s*2.6,-5.0,0.8], {x:0.4,y:0.5,z:0.4});
+      part(cyl(0.11, 0.11, 0.06, glowMat, 16), `kneeVent-${s}`, [s*0.65, -3.23, 0.68], {x: Math.PI/2, y: 0, z: 0}, [s*2.5, -5.2, 1.0], {x:0,y:0,z:0});
+      part(box(0.64,1.62,0.72,armorLight), `shin-${s}`, [s*0.65,-3.98,0], {x:0,y:0,z:0}, [s*3.7,-5.3,0.9], {x:-1,y:0.4,z:0.8});
+      part(box(0.5,1.3,0.3,armor), `shinGuard-${s}`, [s*0.65,-3.95,0.4], {x:-0.1,y:0,z:0}, [s*3.9,-5.5,1.2], {x:0.5,y:0.4,z:0.5});
+      part(cyl(0.18,0.22,0.4,jointMat), `calfThruster-${s}`, [s*0.65,-3.7,-0.42], {x:0,y:0,z:0}, [s*3.5,-5.8,-0.5], {x:0,y:0,z:0});
+      part(cyl(0.06,0.04,0.04,orangeGlow,12), `calfLight-${s}`, [s*0.65,-3.7,-0.65], {x:0,y:0,z:0}, [s*3.6,-6.0,-0.8], {x:0,y:0,z:0});
+      part(cyl(0.1,0.1,0.3,glowMat,12), `calfCell-${s}`, [s*0.65,-3.5,-0.5], {x:0,y:0,z:0}, [s*3.4,-5.6,-0.7], {x:0,y:0,z:0});
+      part(cyl(0.22,0.22,0.16,jointMat), `ankle-${s}`, [s*0.65,-4.78,0], {x:0,y:0,z:0}, [s*2.8,-6.2,-0.5], {x:0.3,y:0.5,z:0.4});
+      part(box(0.8,0.38,1.26,darkMetal), `foot-${s}`, [s*0.65,-4.95,0.22], {x:0,y:0,z:0}, [s*2.8,-6.4,-0.7], {x:0.4,y:-0.3,z:-0.4});
+      part(box(0.5,0.3,0.4,armor), `footToe-${s}`, [s*0.65,-4.92,0.78], {x:0.3,y:0,z:0}, [s*2.6,-6.5,0.0], {x:0.5,y:0,z:0.5});
+      part(box(0.4,0.4,0.3,armor), `footHeel-${s}`, [s*0.65,-4.95,-0.35], {x:0,y:0,z:0}, [s*3.0,-6.6,-1.0], {x:0,y:0,z:0});
+    }
+    makeLeg(1); makeLeg(-1);
+
+    robot.position.y = 2.55;
+    robot.scale.setScalar(0.78);
+
+    // ═════════════════════════ Orbital shield drones ═════════════════════════
+    const orbitalDrones = [];
+    const droneBodyGeo = new THREE.BoxGeometry(0.24, 0.1, 0.16);
+    const droneWingGeo = new THREE.BoxGeometry(0.4, 0.02, 0.06);
+    const droneLightGeo = new THREE.BoxGeometry(0.06, 0.04, 0.06);
+    for (let i = 0; i < 3; i++) {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(droneBodyGeo, darkMetal);
+      const wingL = new THREE.Mesh(droneWingGeo, armorLight);
+      wingL.position.set(-0.28, 0, 0);
+      const wingR = new THREE.Mesh(droneWingGeo, armorLight);
+      wingR.position.set(0.28, 0, 0);
+      const light = new THREE.Mesh(droneLightGeo, glowMat);
+      light.position.set(0, 0.07, 0);
+      const tailLight = new THREE.Mesh(droneLightGeo, orangeGlow);
+      tailLight.position.set(0, 0, -0.11);
+      tailLight.scale.set(0.7, 0.7, 0.7);
+      g.add(body, wingL, wingR, light, tailLight);
+      scene.add(g);
+      orbitalDrones.push({
+        group: g,
+        baseAngle: (i / 3) * Math.PI * 2,
+        radius: 3.2 + i * 0.35,
+        height: 1.4 + i * 0.35,
+        speed: 0.4 + i * 0.1,
+        dockOffset: new THREE.Vector3(
+          [-0.55, 0, 0.55][i],
+          0.55 + i * 0.15,
+          -0.75
+        ),
+        dockFlashFired: false,
+      });
+    }
+
+    // ═════════════════════════ Spark particle system ═════════════════════════
+    const sparkCount = 500;
+    const sparkGeo = new THREE.BufferGeometry();
+    const sparkPositions = new Float32Array(sparkCount * 3);
+    const sparkVelocities = new Float32Array(sparkCount * 3);
+    const sparkLives = new Float32Array(sparkCount);
+    const sparkColors = new Float32Array(sparkCount * 3);
+    for (let i = 0; i < sparkCount; i++) { sparkLives[i] = 0; sparkPositions[i*3+1] = -100; }
+    sparkGeo.setAttribute("position", new THREE.BufferAttribute(sparkPositions, 3));
+    sparkGeo.setAttribute("color", new THREE.BufferAttribute(sparkColors, 3));
+    const sparkSystem = new THREE.Points(sparkGeo, new THREE.PointsMaterial({
+      size: 0.09, vertexColors: true, transparent: true, opacity: 1.0,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    sparkSystem.frustumCulled = false;
+    scene.add(sparkSystem);
+
+    const sparkColorPool = [
+      new THREE.Color(0x8af2ff), new THREE.Color(0x65e8ff),
+      new THREE.Color(0xffb15e), new THREE.Color(0xffffff),
+      new THREE.Color(0xff4f6a),
+    ];
+    let sparkActive = 0;
+    let sparkCursor = 0;
+    let sparkDirty = false;
+
+    function emitSpark(px, py, pz, vx, vy, vz, life, cr, cg, cb) {
+      for (let n = 0; n < sparkCount; n++) {
+        const i = (sparkCursor + n) % sparkCount;
+        if (sparkLives[i] <= 0) {
+          sparkCursor = (i + 1) % sparkCount;
+          sparkPositions[i*3] = px; sparkPositions[i*3+1] = py; sparkPositions[i*3+2] = pz;
+          sparkVelocities[i*3] = vx; sparkVelocities[i*3+1] = vy; sparkVelocities[i*3+2] = vz;
+          sparkLives[i] = life;
+          sparkColors[i*3] = cr; sparkColors[i*3+1] = cg; sparkColors[i*3+2] = cb;
+          sparkActive++;
+          sparkDirty = true;
+          return;
+        }
+      }
+    }
+
+    function spawnSparks(x, y, z, count = 22, speedMul = 1.0) {
+      for (let k = 0; k < count; k++) {
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const speed = (1.4 + Math.random() * 2.8) * speedMul;
+        const c = sparkColorPool[(Math.random() * sparkColorPool.length) | 0];
+        emitSpark(
+          x, y, z,
+          speed * Math.sin(phi) * Math.cos(theta),
+          speed * Math.cos(phi),
+          speed * Math.sin(phi) * Math.sin(theta),
+          1.0, c.r, c.g, c.b
+        );
+      }
+      if (sparkDirty) {
+        sparkGeo.attributes.position.needsUpdate = true;
+        sparkGeo.attributes.color.needsUpdate = true;
+      }
+    }
+
+    function updateSparks(dt) {
+      if (sparkActive === 0) return;
+      const drag = Math.pow(0.94, dt * 60);
+      for (let i = 0; i < sparkCount; i++) {
+        const life = sparkLives[i];
+        if (life > 0) {
+          const nl = life - dt * 1.6;
+          if (nl <= 0) {
+            sparkLives[i] = 0;
+            sparkPositions[i*3] = 0; sparkPositions[i*3+1] = -100; sparkPositions[i*3+2] = 0;
+            sparkActive--;
+          } else {
+            sparkLives[i] = nl;
+            sparkPositions[i*3]   += sparkVelocities[i*3]   * dt;
+            sparkPositions[i*3+1] += sparkVelocities[i*3+1] * dt - 0.6 * dt;
+            sparkPositions[i*3+2] += sparkVelocities[i*3+2] * dt;
+            sparkVelocities[i*3]   *= drag;
+            sparkVelocities[i*3+1] *= drag;
+            sparkVelocities[i*3+2] *= drag;
+          }
+        }
+      }
+      sparkGeo.attributes.position.needsUpdate = true;
+    }
+
+    // ═════════════════════════ Impact flash pool ═════════════════════════
+    const flashTexture = (() => {
+      const c = document.createElement("canvas"); c.width = c.height = 128;
+      const cx = c.getContext("2d");
+      const g = cx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      g.addColorStop(0, "rgba(255,255,255,1)");
+      g.addColorStop(0.25, "rgba(138,242,255,0.85)");
+      g.addColorStop(0.6, "rgba(101,232,255,0.25)");
+      g.addColorStop(1, "rgba(101,232,255,0)");
+      cx.fillStyle = g; cx.fillRect(0, 0, 128, 128);
+      return new THREE.CanvasTexture(c);
+    })();
+    const flashPool = [];
+    for (let i = 0; i < 10; i++) {
+      const mat = new THREE.SpriteMaterial({
+        map: flashTexture,
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(0.01, 0.01, 0.01);
+      sprite.visible = false;
+      scene.add(sprite);
+      flashPool.push({ sprite, mat, life: 0, maxLife: 1 });
+    }
+    function spawnFlash(x, y, z, size = 1.5, color = 0xffffff, life = 0.45) {
+      for (let i = 0; i < flashPool.length; i++) {
+        const f = flashPool[i];
+        if (f.life <= 0) {
+          f.life = life;
+          f.maxLife = life;
+          f.sprite.position.set(x, y, z);
+          f.sprite.visible = true;
+          f.sprite.scale.set(0.01, 0.01, 0.01);
+          f.mat.color.setHex(color);
+          f.mat.opacity = 0.85;
+          f._size = size;
+          return;
+        }
+      }
+    }
+    function updateFlashes(dt) {
+      for (let i = 0; i < flashPool.length; i++) {
+        const f = flashPool[i];
+        if (f.life > 0) {
+          f.life -= dt;
+          const t = 1 - f.life / f.maxLife;
+          const s = f._size * (0.4 + t * 1.6);
+          f.sprite.scale.set(s, s, s);
+          f.mat.opacity = Math.max(0, 0.85 * (1 - t));
+          if (f.life <= 0) {
+            f.sprite.visible = false;
+            f.mat.opacity = 0;
+          }
+        }
+      }
+    }
+
+    // ═════════════════════════ Trail particle system ═════════════════════════
+    const trailCount = 300;
+    const trailGeo = new THREE.BufferGeometry();
+    const trailPos = new Float32Array(trailCount * 3);
+    const trailLife = new Float32Array(trailCount);
+    const trailCol = new Float32Array(trailCount * 3);
+    for (let i = 0; i < trailCount; i++) { trailLife[i] = 0; trailPos[i*3+1] = -100; }
+    trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPos, 3));
+    trailGeo.setAttribute("color", new THREE.BufferAttribute(trailCol, 3));
+    const trailSystem = new THREE.Points(trailGeo, new THREE.PointsMaterial({
+      size: 0.05, vertexColors: true, transparent: true, opacity: 0.6,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    trailSystem.frustumCulled = false;
+    scene.add(trailSystem);
+
+    let trailActive = 0;
+    let trailCursor = 0;
+    let trailFrame = 0;
+    let trailDirty = false;
+
+    function emitTrail(px, py, pz) {
+      for (let n = 0; n < trailCount; n++) {
+        const j = (trailCursor + n) % trailCount;
+        if (trailLife[j] <= 0) {
+          trailCursor = (j + 1) % trailCount;
+          trailPos[j*3] = px; trailPos[j*3+1] = py; trailPos[j*3+2] = pz;
+          trailLife[j] = 0.5;
+          trailCol[j*3] = 0.5; trailCol[j*3+1] = 0.9; trailCol[j*3+2] = 1.0;
+          trailActive++;
+          trailDirty = true;
+          return;
+        }
+      }
+    }
+
+    function updateTrails(dt) {
+      if (trailActive === 0) return;
+      for (let i = 0; i < trailCount; i++) {
+        if (trailLife[i] > 0) {
+          const nl = trailLife[i] - dt;
+          trailLife[i] = nl;
+          if (nl <= 0) { trailPos[i*3+1] = -100; trailActive--; }
+        }
+      }
+      trailGeo.attributes.position.needsUpdate = true;
+      trailGeo.attributes.color.needsUpdate = true;
+    }
+
+    // ═════════════════════════ Camera shake ═════════════════════════
+    let shakeIntensity = 0;
+    function triggerShake(intensity = 0.12) {
+      if (intensity > shakeIntensity) shakeIntensity = intensity;
+    }
+    function updateShake(dt) {
+      if (shakeIntensity > 0.0006) {
+        cameraRig.position.set(
+          (Math.random() - 0.5) * shakeIntensity,
+          (Math.random() - 0.5) * shakeIntensity,
+          (Math.random() - 0.5) * shakeIntensity * 0.5
+        );
+        shakeIntensity *= Math.pow(0.88, dt * 60);
+      } else if (shakeIntensity !== 0) {
+        shakeIntensity = 0;
+        cameraRig.position.set(0, 0, 0);
+      }
+    }
+
+    // ═════════════════════════ Scroll progress ═════════════════════════
+    let rawProgress = 0;
+    let smoothProgress = 0;
+    let scrollMax = 1;
+
+    function measureScroll() {
+      scrollMax = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+    }
+    function readScroll() {
+      rawProgress = Math.min(1, Math.max(0, window.scrollY / scrollMax));
+    }
+    measureScroll();
+    readScroll();
+    smoothProgress = rawProgress;
+
+    addEventListener("scroll", readScroll, { passive: true });
+
+    // ═════════════════════════ Master assembly timeline ═════════════════════════
+    const assembly = createTimeline({ autoplay: false, defaults: { ease: "out(4)" } });
+
+    for (let i = 0; i < parts.length; i++) {
+      const mesh = parts[i];
+      const a = mesh.userData.assembly;
+      const start = 60 + i * 55;
+      const settle = start + 520;
+      const flyEase = i % 4 === 0 ? "outBack" : i % 4 === 1 ? "outExpo" : i % 4 === 2 ? "out(4)" : "outQuint";
+      const spin = (i % 2 ? 1 : -1) * (Math.PI * (1.25 + (i % 5) * 0.12));
+      assembly
+        .add(mesh.position, { x: a.finalPos[0], y: a.finalPos[1], z: a.finalPos[2], duration: 680, ease: flyEase }, start)
+        .add(mesh.rotation, { x: a.finalRot.x, y: a.finalRot.y, z: a.finalRot.z, duration: 620, ease: "outBack" }, start + 20)
+        .add(mesh.scale, { x: 1, y: 1, z: 1, duration: 580, ease: spring({ bounce: 0.42 }) }, start + 15)
+        .add(mesh.rotation, { x: a.finalRot.x, y: a.finalRot.y + spin * 0.04, z: a.finalRot.z, duration: 380, ease: "inOutSine" }, settle)
+        .add(mesh.rotation, { x: a.finalRot.x, y: a.finalRot.y, z: a.finalRot.z, duration: 240, ease: "out(5)" }, settle + 220);
+    }
+
+    assembly
+      .add(robot.rotation, { y: -0.48, duration: 900, ease: "inOut(3)" }, 500)
+      .add(robot.rotation, { y: 0.35,  duration: 1050, ease: "inOut(3)" }, 1850)
+      .add(robot.rotation, { y: -0.15, duration: 1000, ease: "inOut(4)" }, 3350)
+      .add(robot.rotation, { y: 0.08,  duration: 700, ease: "outBack" }, 4450)
+      .add(robot.rotation, { y: -0.02, duration: 500, ease: "out(4)" }, 5300)
+      .add(robot.rotation, { x: -0.04, duration: 800, ease: "out(3)" }, 4800)
+      .add(robot.position, { y: 2.35, duration: 1000, ease: "outExpo" }, 4800)
+      .add(camera.position, { z: 9.7, y: 1.2, duration: 1200, ease: "outExpo" }, 250)
+      .add(camera.position, { z: 8.2, y: 0.78, duration: 1100, ease: "inOut(3)" }, 3050)
+      .add(camera.position, { z: 7.4, y: 1.1, duration: 900, ease: "outBack" }, 4600)
+      .add(camera.position, { z: 6.5, y: 1.3, duration: 1000, ease: "outExpo" }, 5300)
+      .add(camera.rotation, { x: -0.025, duration: 1000, ease: "out(4)" }, 1100)
+      .add(camera.rotation, { x: 0.02, duration: 800, ease: "inOut(3)" }, 4600)
+      .add(bloomPass, { strength: 1.05, duration: 800, ease: "inOut(3)" }, 2800)
+      .add(bloomPass, { strength: 1.15, duration: 1000, ease: "out(3)" }, 4800)
+      .add(bloomPass, { strength: 0.85, duration: 700, ease: "out(4)" }, 5600)
+      .add(scene.fog, { density: 0.02, duration: 1200, ease: "inOut(3)" }, 4800)
+      .add(renderer, { toneMappingExposure: 1.04, duration: 1000, ease: "inOut(3)" }, 4800)
+      .add(coreLight, { intensity: 1.8, duration: 800, ease: "outExpo" }, 2800)
+      .add(coreLight, { intensity: 2.2, duration: 1000, ease: "out(3)" }, 4800)
+      .add(finaleKey, { intensity: 0.7, duration: 900, ease: "out(3)" }, 5200)
+      .add(finaleRim, { intensity: 1.0, duration: 1000, ease: "outExpo" }, 4800)
+      .add(swordBlade.scale, { y: 1.0, duration: 900, ease: "outExpo" }, 5000)
+      .add(swordBlade.material, { emissiveIntensity: 4.0, duration: 800, ease: "out(3)" }, 5000)
+      .add(swordBlade.material, { opacity: 0.95, duration: 600, ease: "out(4)" }, 5000);
+
+    const ASSEMBLY_DURATION =
+      (typeof assembly.duration === "number" && assembly.duration > 100) ? assembly.duration : 7000;
+
+    // ═════════════════════════ UI text animations ═════════════════════════
+    const titleSplit = splitText(".title", { chars: true });
+    animate(titleSplit.chars, {
+      opacity: [0, 1], translateY: [45, 0], rotateX: [-90, 0],
+      delay: stagger(55, { from: "center" }),
+      duration: 950, ease: "outBack"
+    });
+    animate(".eyebrow", { opacity: [0, 1], translateY: [20, 0], duration: 850, ease: "out(4)" });
+    animate(".subtitle", { opacity: [0, 1], translateY: [24, 0], duration: 1000, delay: 420, ease: "out(4)" });
+
+    animate("#heroCopy", {
+      opacity: [1, 0], translateY: [0, -90], scale: [1, 0.92],
+      duration: 1200, ease: "inOutQuad",
+      autoplay: onScroll({ target: "#scrollSpace", enter: "top top", leave: "bottom bottom", sync: true })
+    });
+
+    document.querySelectorAll(".section").forEach((section, i) => {
+      const panel = section.querySelector(".panel");
+      animate(panel, {
+        opacity: [0.15, 1], translateY: [65, 0], rotateX: [10, 0], scale: [0.96, 1],
+        duration: 900, ease: "out(4)",
+        autoplay: onScroll({ target: section, enter: "center bottom", leave: "center top", sync: "inOutCirc" })
+      });
+      animate(panel.querySelector("small"), {
+        letterSpacing: ["0.08em", "0.22em"],
+        duration: 700, delay: 180 + i * 45, ease: "out(3)",
+        autoplay: onScroll({ target: section, enter: "center bottom", leave: "center top", sync: "inOutCirc" })
+      });
+      animate(panel.querySelectorAll(".stat-value"), {
+        opacity: [0, 1], translateY: [8, 0],
+        delay: stagger(70, { start: 220 }),
+        duration: 500, ease: "out(3)",
+        autoplay: onScroll({ target: section, enter: "center bottom", leave: "center top", sync: "inOutCirc" })
+      });
+    });
+
+    // ═════════════════════════ Ambient loops ═════════════════════════
+    animate(starField.rotation, { y: Math.PI * 2, duration: 32000, loop: true, ease: "linear" });
+    animate(dust.position, { y: 0.5, x: 0.3, duration: 9000, loop: true, alternate: true, ease: "inOutSine" });
+    animate(reactorRing.rotation, { z: Math.PI * 2, duration: 3000, loop: true, ease: "linear" });
+    animate(contactShadow.material, {
+      opacity: [0.5, 0.7, 0.5], duration: 3200,
+      loop: true, alternate: true, ease: "inOutSine"
+    });
+    animate(floorGlowMesh.material, {
+      opacity: [0.35, 0.55, 0.35], duration: 4200,
+      loop: true, alternate: true, ease: "inOutSine"
+    });
+
+    animate(glowMat, { emissiveIntensity: [1.6, 3.0, 1.6], duration: 1050, loop: true, alternate: true, ease: "inOutSine" });
+    animate(orangeGlow, { emissiveIntensity: [1.4, 2.6, 1.4], duration: 1280, loop: true, alternate: true, delay: 140, ease: "inOutSine" });
+    animate(redGlow, { emissiveIntensity: [1.2, 2.2, 1.2], duration: 900, loop: true, alternate: true, delay: 200, ease: "inOutSine" });
+    animate(crestMat, { emissiveIntensity: [2.0, 3.8, 2.0], duration: 1800, loop: true, alternate: true, ease: "inOutSine" });
+    animate(rim,  { intensity: [2.2, 3.6, 2.2], duration: 2100, loop: true, alternate: true, ease: "inOutSine" });
+    animate(warm, { intensity: [1.0, 2.0, 1.0], duration: 2700, loop: true, alternate: true, ease: "inOutQuad" });
+    animate(underGlow, { intensity: [1.2, 2.2, 1.2], duration: 1800, loop: true, alternate: true, ease: "inOutSine" });
+
+    animate(robot.scale, {
+      x: [0.78, 0.800, 0.78],
+      y: [0.78, 0.791, 0.78],
+      z: [0.78, 0.800, 0.78],
+      duration: 2200, loop: true, ease: "inOutSine"
+    });
+
+    // ═════════════════════════ Milestone system ═════════════════════════
+    const milestones = [0.08, 0.18, 0.28, 0.38, 0.48, 0.58, 0.68, 0.78, 0.86, 0.93];
+    const milestoneLabels = [
+      "TORSO // LOCKED", "CHEST // SEALED", "HEAD // ONLINE", "CORE // IGNITION",
+      "PELVIS // ALIGNED", "ARMS // MOUNTED", "LEGS // LOCKED", "WINGS // DEPLOYED",
+      "REACTOR // STABLE", "UNIT 07 // READY"
+    ];
+    let lastMilestone = -1;
+    const labelContainer = document.getElementById("partLabels");
+    const activeLabels = [];
+
+    function checkMilestones(p) {
+      for (let i = 0; i < milestones.length; i++) {
+        if (p >= milestones[i] && i > lastMilestone) {
+          lastMilestone = i;
+          const partIdx = Math.floor((i / milestones.length) * parts.length);
+          const mesh = parts[Math.min(partIdx, parts.length - 1)];
+          if (mesh) {
+            mesh.getWorldPosition(_v1);
+            spawnSparks(_v1.x, _v1.y, _v1.z, 26 + Math.floor(Math.random() * 14), 1.15);
+            spawnFlash(_v1.x, _v1.y, _v1.z, 1.8 + i * 0.08, i >= 8 ? 0xffb15e : 0x8af2ff, 0.45);
+          }
+          triggerShake(0.07 + i * 0.009);
+          bloomPulse = Math.max(bloomPulse, 0.18 + i * 0.02);
+          showLabel(i);
+        }
+      }
+      if (p < milestones[0]) lastMilestone = -1;
+    }
+
+    function showLabel(idx) {
+      const label = document.createElement("div");
+      label.className = "part-label";
+      label.textContent = milestoneLabels[idx] || "";
+      labelContainer.appendChild(label);
+      label._life = 2.5;
+      label._partIdx = Math.floor((idx / milestones.length) * parts.length);
+      label._opacity = 0;
+      activeLabels.push(label);
+    }
+
+    let viewW = innerWidth, viewH = innerHeight;
+    function updateLabels(dt) {
+      if (activeLabels.length === 0) return;
+      for (let i = activeLabels.length - 1; i >= 0; i--) {
+        const label = activeLabels[i];
+        label._life -= dt;
+        if (label._life > 2.0) {
+          label._opacity = Math.min(1, label._opacity + dt * 4);
+        } else if (label._life < 0.8) {
+          label._opacity = Math.max(0, label._opacity - dt * 2);
+        }
+        label.style.opacity = label._opacity;
+
+        const mesh = parts[Math.min(label._partIdx, parts.length - 1)];
+        if (mesh) {
+          mesh.getWorldPosition(_v2);
+          _v2.project(camera);
+          label.style.transform =
+            `translate3d(${((_v2.x * 0.5 + 0.5) * viewW).toFixed(1)}px, ` +
+            `${((-_v2.y * 0.5 + 0.5) * viewH - 35).toFixed(1)}px, 0) ` +
+            `translate(-50%, -50%)`;
+        }
+
+        if (label._life <= 0) {
+          label.remove();
+          activeLabels.splice(i, 1);
+        }
+      }
+    }
+
+    // ═════════════════════════ Orbital drones ═════════════════════════
+    let droneOrbitTime = 0;
+    function updateDrones(dt, p) {
+      droneOrbitTime += dt;
+      const dockT = Math.max(0, Math.min(1, (p - 0.85) / 0.11));
+      const eased = dockT * dockT * (3 - 2 * dockT);
+      const overshoot = Math.sin(eased * Math.PI) * 0.06;
+
+      for (let i = 0; i < orbitalDrones.length; i++) {
+        const d = orbitalDrones[i];
+        const angle = d.baseAngle + droneOrbitTime * d.speed;
+        const orbitX = Math.cos(angle) * d.radius;
+        const orbitZ = Math.sin(angle) * d.radius;
+        const orbitY = d.height + Math.sin(droneOrbitTime * 0.7 + i) * 0.25;
+
+        const dockX = robot.position.x + d.dockOffset.x;
+        const dockY = robot.position.y + d.dockOffset.y + overshoot;
+        const dockZ = robot.position.z + d.dockOffset.z;
+
+        // Approach smoothly, then hard-clamp on the final frame so the drone
+        // actually *snaps* into its dock instead of easing through the target.
+        if (eased >= 0.98) {
+          d.group.position.set(
+            robot.position.x + d.dockOffset.x,
+            robot.position.y + d.dockOffset.y,
+            robot.position.z + d.dockOffset.z
+          );
+
+          if (!d.dockFlashFired) {
+            d.dockFlashFired = true;
+            spawnFlash(d.group.position.x, d.group.position.y, d.group.position.z, 0.6, 0x8af2ff, 0.3);
+          }
+        } else {
+          d.group.position.set(
+            orbitX + (dockX - orbitX) * eased,
+            orbitY + (dockY - orbitY) * eased,
+            orbitZ + (dockZ - orbitZ) * eased
+          );
+        }
+
+        // Allow the docking effect to fire again when the sequence is reversed.
+        if (p < 0.85) d.dockFlashFired = false;
+
+        d.group.rotation.y = angle + Math.PI;
+        d.group.rotation.z = Math.sin(droneOrbitTime * 2 + i) * 0.15 * (1 - eased);
+      }
+    }
+
+    // ═════════════════════════ Schematic canvas ═════════════════════════
+    // Silhouette fill — no reference rectangles, just mass that lights up as
+    // parts snap into place.
+    const schematicCanvas = document.getElementById("schematicCanvas");
+    const sctx = schematicCanvas.getContext("2d");
+    let lastSchematicP = -1;
+
+    function drawSchematic(p) {
+      if (Math.abs(p - lastSchematicP) < 0.0025) return;
+      lastSchematicP = p;
+
+      sctx.clearRect(0, 0, 120, 180);
+
+      // Dim base silhouette
+      sctx.fillStyle = "rgba(101,232,255,0.10)";
+      sctx.fillRect(45, 10, 30, 25);      // head
+      sctx.fillRect(35, 38, 50, 45);      // torso
+      sctx.fillRect(40, 85, 40, 18);      // pelvis
+      sctx.fillRect(18, 38, 14, 50);      // left arm
+      sctx.fillRect(88, 38, 14, 50);      // right arm
+      sctx.fillRect(42, 106, 14, 60);     // left leg
+      sctx.fillRect(64, 106, 14, 60);     // right leg
+
+      // Brighten each zone as progress reaches its milestone
+      if (p >= 0.08) { sctx.fillStyle = "rgba(101,232,255,0.75)"; sctx.fillRect(45,10,30,25); }
+      if (p >= 0.18) { sctx.fillStyle = "rgba(101,232,255,0.55)"; sctx.fillRect(35,38,50,45); }
+      if (p >= 0.28) { sctx.fillStyle = "rgba(101,232,255,0.75)"; sctx.fillRect(40,85,40,18); }
+      if (p >= 0.48) { sctx.fillStyle = "rgba(101,232,255,0.65)"; sctx.fillRect(18,38,14,50); sctx.fillRect(88,38,14,50); }
+      if (p >= 0.58) { sctx.fillStyle = "rgba(101,232,255,0.65)"; sctx.fillRect(42,106,14,60); sctx.fillRect(64,106,14,60); }
+      if (p >= 0.78) {
+        sctx.fillStyle = "rgba(255,177,94,0.9)";
+        sctx.beginPath(); sctx.arc(60, 55, 5, 0, Math.PI*2); sctx.fill();
+      }
+
+      // Progress wash — a single soft horizontal band sweeping down
+      const scanY = 10 + (p * 150);
+      const grad = sctx.createLinearGradient(10, scanY - 12, 10, scanY + 4);
+      grad.addColorStop(0, "rgba(101,232,255,0)");
+      grad.addColorStop(1, "rgba(101,232,255,0.25)");
+      sctx.fillStyle = grad;
+      sctx.fillRect(10, scanY - 12, 100, 16);
+    }
+
+    // ═════════════════════════ Radar canvas ═════════════════════════
+    // Just a sweep and drone blips — no crosshair, no concentric rings.
+    const radarCanvas = document.getElementById("radarCanvas");
+    const rctx = radarCanvas.getContext("2d");
+    let radarSweep = 0;
+    let lastRadarDraw = 0;
+
+    function drawRadar(dt, p) {
+      radarSweep += dt * 1.8;
+      lastRadarDraw += dt;
+      if (lastRadarDraw < 0.033) return;
+      lastRadarDraw = 0;
+
+      const W = 128, H = 128, cx = 64, cy = 64, R = 56;
+      rctx.clearRect(0, 0, W, H);
+
+      // Sweep beam
+      const sweepGrad = rctx.createLinearGradient(
+        cx, cy,
+        cx + Math.cos(radarSweep) * R,
+        cy + Math.sin(radarSweep) * R
+      );
+      sweepGrad.addColorStop(0, "rgba(101,232,255,0.8)");
+      sweepGrad.addColorStop(1, "rgba(101,232,255,0)");
+      rctx.strokeStyle = sweepGrad;
+      rctx.lineWidth = 2;
+      rctx.beginPath();
+      rctx.moveTo(cx, cy);
+      rctx.lineTo(cx + Math.cos(radarSweep) * R, cy + Math.sin(radarSweep) * R);
+      rctx.stroke();
+
+      // Fading arc trail
+      rctx.fillStyle = "rgba(101,232,255,0.08)";
+      rctx.beginPath();
+      rctx.moveTo(cx, cy);
+      rctx.arc(cx, cy, R, radarSweep - 0.7, radarSweep);
+      rctx.closePath();
+      rctx.fill();
+
+      // Drone blips
+      for (let i = 0; i < orbitalDrones.length; i++) {
+        const d = orbitalDrones[i];
+        const angle = d.baseAngle + radarSweep * 0.55 + i * 0.4;
+        const r = 18 + i * 12;
+        const bx = cx + Math.cos(angle) * r;
+        const by = cy + Math.sin(angle) * r;
+        rctx.fillStyle = i === 1 ? "rgba(255,177,94,0.95)" : "rgba(101,232,255,0.95)";
+        rctx.beginPath();
+        rctx.arc(bx, by, 2.6, 0, Math.PI * 2);
+        rctx.fill();
+        // Small halo around each blip
+        rctx.fillStyle = i === 1 ? "rgba(255,177,94,0.2)" : "rgba(101,232,255,0.2)";
+        rctx.beginPath();
+        rctx.arc(bx, by, 6, 0, Math.PI * 2);
+        rctx.fill();
+      }
+
+      // Core
+      rctx.fillStyle = "rgba(255,255,255,0.95)";
+      rctx.beginPath();
+      rctx.arc(cx, cy, 2.2, 0, Math.PI * 2);
+      rctx.fill();
+
+      // Dock pulse
+      if (p > 0.85) {
+        const t = Math.min(1, (p - 0.85) / 0.11);
+        rctx.strokeStyle = `rgba(255,177,94,${0.35 + t * 0.45})`;
+        rctx.lineWidth = 1.5;
+        rctx.beginPath();
+        rctx.arc(cx, cy, 8 + t * 4, 0, Math.PI * 2);
+        rctx.stroke();
+      }
+    }
+
+    // ═════════════════════════ Cached DOM + UI update ═════════════════════════
+    const DOM = {
+      progressBar: document.getElementById("progressBar"),
+      progressText: document.getElementById("progressText"),
+      joints: document.getElementById("telemetryJoints"),
+      bar: document.getElementById("telemetryBar"),
+      core: document.getElementById("telemetryCore"),
+      sync: document.getElementById("telemetrySync"),
+      temp: document.getElementById("telemetryTemp"),
+      field: document.getElementById("telemetryField"),
+      uplink: document.getElementById("telemetryUplink"),
+      chassis: document.getElementById("srChassis"),
+      artic: document.getElementById("srArtic"),
+      power: document.getElementById("srPower"),
+      integ: document.getElementById("srInteg"),
+      reactor: document.getElementById("srReactor"),
+      drones: document.getElementById("srDrones"),
+      hudPhase: document.getElementById("hudPhase"),
+      hint: document.getElementById("scrollHint"),
+      boot: document.getElementById("bootMessage"),
+      lbTop: document.querySelector(".letterbox.top"),
+      lbBottom: document.querySelector(".letterbox.bottom"),
+      dots: Array.from(document.querySelectorAll(".phase-dot")),
+    };
+
+    const PHASE_NAMES = ["INIT", "FRAME", "LIMB", "CORE", "LOCK"];
+    let lastUIProgress = -1;
+    let lastPhaseIdx = -1;
+    let lastHintVisible = true;
+    let lastBootVisible = false;
+    let lastLetterbox = -1;
+
+    function updateUI(p) {
+      const pct = Math.round(p * 100);
+      DOM.progressBar.style.width = pct + "%";
+      DOM.progressText.textContent = String(pct).padStart(2, "0");
+
+      const joints = Math.min(100, Math.round(Math.max(0, p - 0.08) / 0.72 * 100));
+      DOM.joints.textContent = joints + "%";
+      DOM.bar.style.width = joints + "%";
+      DOM.core.textContent = p > 0.72 ? "ONLINE" : p > 0.35 ? "BOOTING" : "OFFLINE";
+      DOM.sync.textContent = p > 0.88 ? "LOCKED" : p > 0.5 ? "SYNCING" : "STANDBY";
+      DOM.temp.textContent = (24 + p * 88).toFixed(1) + "°C";
+      DOM.field.textContent = p > 0.78 ? "STABLE" : p > 0.4 ? "FORMING" : "EMPTY";
+      DOM.uplink.textContent = p > 0.85 ? "DOCKING" : p > 0.45 ? "LINKING" : "SEARCH";
+
+      DOM.chassis.textContent = p < 0.18 ? "FRAME-0" : p < 0.45 ? "FRAME-A" : p < 0.75 ? "FRAME-B" : "FRAME-X";
+      DOM.artic.textContent = Math.round(joints / 100 * 40) + " / 40";
+      DOM.power.textContent = p < 0.35 ? "IDLE" : p < 0.72 ? "RAISING" : "NOMINAL";
+      DOM.integ.textContent = (60 + p * 40).toFixed(1) + "%";
+      DOM.reactor.textContent = p < 0.35 ? "COLD" : p < 0.72 ? "WARMING" : p < 0.88 ? "ONLINE" : "PEAK";
+      DOM.drones.textContent = p > 0.96 ? "DOCKED 3/3" : p > 0.85 ? "DOCKING" : "ORBIT 3/3";
+
+      const phaseIdx = Math.min(4, Math.floor(p * 5));
+      if (phaseIdx !== lastPhaseIdx) {
+        lastPhaseIdx = phaseIdx;
+        for (let i = 0; i < DOM.dots.length; i++) {
+          DOM.dots[i].classList.toggle("active", i <= phaseIdx);
+        }
+        DOM.hudPhase.textContent = PHASE_NAMES[phaseIdx];
+      }
+
+      const lb = p > 0.88 ? Math.round((p - 0.88) / 0.12 * 70) : 0;
+      if (lb !== lastLetterbox) {
+        lastLetterbox = lb;
+        DOM.lbTop.style.height = lb + "px";
+        DOM.lbBottom.style.height = lb + "px";
+      }
+
+      const hintVisible = p <= 0.02;
+      if (hintVisible !== lastHintVisible) {
+        lastHintVisible = hintVisible;
+        DOM.hint.style.opacity = hintVisible ? "1" : "0";
+      }
+      const bootVisible = p > 0.91;
+      if (bootVisible !== lastBootVisible) {
+        lastBootVisible = bootVisible;
+        DOM.boot.style.opacity = bootVisible ? "1" : "0";
+      }
+
+      drawSchematic(p);
+    }
+
+    // ═════════════════════════ Energy aura ═════════════════════════
+    let auraAccum = 0;
+    function updateAura(dt, p) {
+      if (p <= 0.82) return;
+      auraAccum += dt;
+      if (auraAccum < 0.06) return;
+      auraAccum = 0;
+      core.getWorldPosition(_v3);
+      emitSpark(
+        _v3.x + (Math.random() - 0.5) * 0.4,
+        _v3.y,
+        _v3.z + (Math.random() - 0.5) * 0.4,
+        (Math.random() - 0.5) * 0.6,
+        0.4 + Math.random() * 1.2,
+        (Math.random() - 0.5) * 0.6,
+        1.4, 0.5, 0.9, 1.0
+      );
+      sparkGeo.attributes.position.needsUpdate = true;
+      sparkGeo.attributes.color.needsUpdate = true;
+    }
+
+    // ═════════════════════════ Adaptive quality governor ═════════════════════════
+    let perfAccum = 0, perfFrames = 0, qualityCooldown = 0;
+    function governQuality(dt) {
+      if (qualityCooldown > 0) { qualityCooldown -= dt; return; }
+      perfAccum += dt; perfFrames++;
+      if (perfFrames < 50) return;
+      const avg = perfAccum / perfFrames;
+      perfAccum = 0; perfFrames = 0;
+
+      let next = dpr;
+      if (avg > 0.0215 && dpr > MIN_DPR) next = Math.max(MIN_DPR, dpr - 0.15);
+      else if (avg < 0.0128 && dpr < MAX_DPR) next = Math.min(MAX_DPR, dpr + 0.1);
+
+      if (Math.abs(next - dpr) > 0.01) {
+        dpr = next;
+        applySize();
+        qualityCooldown = 1.5;
+      }
+    }
+
+    // ═════════════════════════ Render loop ═════════════════════════
+    const clock = new THREE.Clock();
+    let firstFrame = true;
+
+    function render() {
+      const rawDt = clock.getDelta();
+      const dt = Math.min(0.05, rawDt);
+
+      const k = 1 - Math.exp(-10 * dt);
+      smoothProgress += (rawProgress - smoothProgress) * k;
+      if (Math.abs(rawProgress - smoothProgress) < 0.00035) smoothProgress = rawProgress;
+
+      assembly.seek(smoothProgress * ASSEMBLY_DURATION);
+
+      updateShake(dt);
+      updateSparks(dt);
+      updateFlashes(dt);
+      updateAura(dt, smoothProgress);
+      updateDrones(dt, smoothProgress);
+
+      trailFrame++;
+      if (trailFrame & 1) {
+        for (let i = 0; i < parts.length; i += 4) {
+          const mesh = parts[i];
+          if (mesh.position.distanceToSquared(mesh.userData.assembly.finalVec) > 0.0225) {
+            mesh.getWorldPosition(_v4);
+            emitTrail(_v4.x, _v4.y, _v4.z);
+          }
+        }
+        if (trailDirty) {
+          trailGeo.attributes.position.needsUpdate = true;
+          trailGeo.attributes.color.needsUpdate = true;
+          trailDirty = false;
+        }
+      }
+      updateTrails(dt);
+      updateLabels(dt);
+
+      if (bloomPulse > 0.001) {
+        bloomPass.strength += bloomPulse;
+        bloomPulse *= Math.pow(0.80, dt * 60);
+      }
+
+      if (Math.abs(smoothProgress - lastUIProgress) > 0.0006) {
+        lastUIProgress = smoothProgress;
+        updateUI(smoothProgress);
+        checkMilestones(smoothProgress);
+      }
+
+      drawRadar(dt, smoothProgress);
+
+      composer.render();
+
+      if (firstFrame) {
+        if (perfFrames > 0 || rawDt < 0.5) firstFrame = false;
+      } else {
+        governQuality(rawDt > 0.25 ? 0.016 : rawDt);
+      }
+    }
+
+    renderer.setAnimationLoop(render);
+
+    // ═════════════════════════ Resize ═════════════════════════
+    let resizeRaf = 0;
+    addEventListener("resize", () => {
+      if (resizeRaf) return;
+      resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = 0;
+        viewW = innerWidth; viewH = innerHeight;
+        applySize();
+        measureScroll();
+        readScroll();
+      });
+    }, { passive: true });
+
+    addEventListener("keydown", e => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      }
+    });
+
+    renderer.compile(scene, camera);
+    applySize();
+    updateUI(0);
+  </script>
+</body>
+</html>

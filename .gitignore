@@ -1,0 +1,2 @@
+# 'node_modules/' is added here as a folder to ignore all files and subfolders within it
+node_modules/
