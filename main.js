@@ -5,6 +5,8 @@ const os = require("os");
 const { pathToFileURL } = require("url");
 const { spawn } = require("child_process");
 
+let mainWindow = null;
+
 const APP_ROOT = path.join(os.homedir(), "Myne");
 const META_FILE = path.join(APP_ROOT, ".myne.json");
 const TRASH_DIR = path.join(APP_ROOT, ".trash");
@@ -131,7 +133,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280, height: 860, minWidth: 900, minHeight: 600,
     backgroundColor: "#13110c",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
@@ -142,44 +144,60 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-  win.loadFile("index.html");
+  mainWindow.loadFile("index.html");
+  mainWindow.on("closed", () => { mainWindow = null; });
 }
 
-app.whenReady().then(async () => {
-  await ensureAppRoot();
-  await purgeOldTrash();
-  Menu.setApplicationMenu(null);
-  if (process.platform === "darwin") {
-    Menu.setApplicationMenu(Menu.buildFromTemplate([
-      { label: app.name, submenu: [
-        { role: "hide" }, { role: "hideOthers" }, { role: "unhide" },
-        { type: "separator" }, { role: "quit" },
-      ]},
-      { label: "Window", submenu: [
-        { role: "minimize" }, { role: "close" }, { role: "front" },
-      ]},
-    ]));
-  }
+const gotTheLock = app.requestSingleInstanceLock();
 
-  protocol.handle("myne", async (request) => {
-    try {
-      const url = new URL(request.url);
-      const raw = url.pathname.split("/").filter(Boolean);
-      if (raw.length < 2) return new Response("Not found", { status: 404 });
-      const folder = decodeURIComponent(raw[0]);
-      const file = decodeURIComponent(raw.slice(1).join("/"));
-      const filePath = safeJoin(folder, file);
-      return net.fetch(pathToFileURL(filePath).toString());
-    } catch (e) {
-      return new Response("Error: " + e.message, { status: 500 });
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
     }
   });
+}
 
-  createWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (gotTheLock) {
+  app.whenReady().then(async () => {
+    await ensureAppRoot();
+    await purgeOldTrash();
+    Menu.setApplicationMenu(null);
+    if (process.platform === "darwin") {
+      Menu.setApplicationMenu(Menu.buildFromTemplate([
+        { label: app.name, submenu: [
+          { role: "hide" }, { role: "hideOthers" }, { role: "unhide" },
+          { type: "separator" }, { role: "quit" },
+        ]},
+        { label: "Window", submenu: [
+          { role: "minimize" }, { role: "close" }, { role: "front" },
+        ]},
+      ]));
+    }
+
+    protocol.handle("myne", async (request) => {
+      try {
+        const url = new URL(request.url);
+        const raw = url.pathname.split("/").filter(Boolean);
+        if (raw.length < 2) return new Response("Not found", { status: 404 });
+        const folder = decodeURIComponent(raw[0]);
+        const file = decodeURIComponent(raw.slice(1).join("/"));
+        const filePath = safeJoin(folder, file);
+        return net.fetch(pathToFileURL(filePath).toString());
+      } catch (e) {
+        return new Response("Error: " + e.message, { status: 500 });
+      }
+    });
+
+    createWindow();
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
   });
-});
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
